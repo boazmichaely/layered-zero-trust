@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/usr/bin/env bash
 # Pattern Library - Shared Functions for Validated Patterns  
 # This library provides config-driven pattern management for both install and uninstall operations
 

@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # New Config-Driven Uninstall Script v2.0

@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/usr/bin/env bash
 set -o pipefail
 
 # New Config-Driven Deploy Script v2.0
