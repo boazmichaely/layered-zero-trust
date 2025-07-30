@@ -1,0 +1,170 @@
+# Pattern Metadata and Descriptions
+# This file contains all text content that appears in the scripts
+
+pattern:
+  name: "Layered Zero Trust"
+  description: |
+    This pattern demonstrates a comprehensive zero-trust security model using 
+    HashiCorp Vault, SPIRE/SPIFFE workload identity, and Red Hat security 
+    components for multi-layered protection.
+
+# Introduction sections for different operations
+introductions:
+  install:
+    title: "{pattern_display_name} - ASYNC INSTALLATION PLAN"
+    overview: |
+      The following components will be monitored in parallel:
+    
+    deployment_flow:
+      title: "DEPLOYMENT FLOW:"
+      description: |
+        Pattern CR → Secrets Loading → Patterns Operator → GitOps + Direct Operators → ArgoCD Applications → Component Deployment
+
+  uninstall:
+    title: "VERBOSE PATTERN UNINSTALL v3.8 (COMPLETE-ARGOCD-AWARE)"
+    overview: |
+      This will perform a COMPLETE cleanup including:
+        • ArgoCD applications (deleted in reverse installation order)
+        • ArgoCD/GitOps operator itself
+        • All operator installations (CSVs and subscriptions)
+        • All pattern namespaces and their contents
+        • All deployed workloads (pods, services, deployments, etc.)
+        • Pattern CR itself
+    
+    warning_note: |
+      This uses reverse-order ArgoCD app deletion (mimicking manual ArgoCD UI deletion)!
+
+# Architecture information
+architecture:
+  overview: |
+    Components work together to provide end-to-end security:
+    • Identity verification at every layer
+    • Encrypted communication between all services
+    • Policy-based access control
+
+  security_layers:
+    - layer: "Infrastructure Security"
+      description: "OpenShift RBAC, network policies, and pod security standards"
+    - layer: "Identity Management"
+      description: "SPIRE/SPIFFE for workload identity and service-to-service authentication"
+    - layer: "Secret Management"
+      description: "HashiCorp Vault for secret storage and rotation"
+    - layer: "Access Control"
+      description: "Red Hat Keycloak for identity and access management"
+    - layer: "Certificate Management"
+      description: "Cert Manager for automated certificate lifecycle"
+
+# Success messages and final outputs
+messages:
+  install:
+    success: |
+      🎉 COMPLETE ASYNC INSTALLATION SUCCESS! 🎉
+      All components deployed successfully using parallel monitoring!
+    
+    failure: |
+      Some components failed. Check ArgoCD console for details.
+      You can check overall status with: make argo-healthcheck
+    
+    confirm_prompt: "Do you want to proceed with async installation? (y/N): "
+
+  uninstall:
+    success: |
+      🎉 COMPLETE CLEANUP SUCCESS! 🎉
+      Pattern '{pattern_name}' has been COMPLETELY uninstalled!
+      Cluster is truly clean - no residue left!
+    
+    failure: |
+      Some resources remain ({total_remaining} total)
+      Check remaining resources manually if needed
+    
+    confirm_prompt: "Do you want to proceed with COMPLETE uninstall? (y/N): "
+
+# Headers for different sections
+headers:
+  initial_state_check: "INITIAL STATE CHECK"
+  resource_mapping: "COMPONENT RESOURCE MAPPING"
+  confirmation: "COMPLETE PATTERN CLEANUP CONFIRMATION"
+  starting_monitors: "STARTING ASYNC COMPONENT MONITORING"
+  live_dashboard: "LIVE MONITORING DASHBOARD"
+  deployment_core: "DEPLOYING CORE PATTERN INFRASTRUCTURE"
+  secrets_loading: "LOADING SECRETS (BEFORE APPLICATION MONITORING)"
+  installation_summary: "ASYNC INSTALLATION SUMMARY"
+  final_verification: "FINAL VERIFICATION"
+
+# Status messages during operations
+status_messages:
+  analyzing_config: "Analyzing pattern configuration..."
+  starting_monitor: "Starting {component_type} monitor..."
+  monitors_started: "All monitors started! Monitoring {count} components in parallel"
+  max_time_reached: "Maximum monitoring time reached ({time} minutes)"
+  all_completed: "All components completed!"
+  installation_time: "Total installation time: {time}"
+  cleanup_processes: "Cleaning up monitoring processes..."
+
+# Progress and timing information
+progress:
+  statistics_labels:
+    total: "Total components:"
+    successful: "Successful:"
+    failed: "Failed:"
+    active: "Active:"
+  
+  dashboard_format:
+    elapsed: "Elapsed: {elapsed} | Last Update: {timestamp}"
+    time_left: "Time left: {time_left}"
+    apps_remaining: "{count} apps remaining"
+    
+# Resource mapping descriptions for uninstall
+uninstall_resource_mapping:
+  argocd_apps:
+    title: "ARGOCD APPLICATIONS (to be deleted in reverse order):"
+    mappings:
+      - display: "Zero Trust Workload Identity Manager"
+        technical: "zero-trust-workload-identity-manager"
+      - display: "Red Hat Cert Manager"
+        technical: "rh-cert-manager"
+      - display: "Red Hat Keycloak"
+        technical: "rh-keycloak"
+      - display: "Golang External Secrets Operator"
+        technical: "golang-external-secrets"
+      - display: "HashiCorp Vault"
+        technical: "vault"
+
+  operators:
+    title: "OPERATORS (to be uninstalled):"
+    mappings:
+      - display: "OpenShift Cert Manager Operator"
+        technical: "openshift-cert-manager-operator"
+      - display: "Red Hat Build of Keycloak Operator"
+        technical: "rhbk-operator"
+      - display: "Zero Trust Workload Identity Manager"
+        technical: "openshift-zero-trust-workload-identity-manager"
+      - display: "Compliance Operator"
+        technical: "compliance-operator"
+      - display: "Red Hat OpenShift GitOps"
+        technical: "openshift-gitops-operator"
+      - display: "Validated Patterns Operator"
+        technical: "patterns-operator"
+
+  pattern_control:
+    title: "PATTERN CONTROL:"
+    mappings:
+      - display: "Main Pattern Application"
+        technical: "layered-zero-trust-hub (managed by Pattern CR)"
+      - display: "Pattern Custom Resource"
+        technical: "layered-zero-trust"
+
+# Pattern team adoption information
+adoption:
+  template_usage: |
+    To adapt this for other Validated Patterns:
+    1. Copy common/pattern-config.yaml and common/pattern-metadata.yaml
+    2. Update component definitions in pattern-config.yaml
+    3. Customize descriptions in pattern-metadata.yaml
+    4. Scripts automatically adapt to your configuration
+  
+  extensibility: |
+    Adding new components:
+    1. Add component definition to pattern-config.yaml
+    2. No code changes required
+    3. Scripts automatically discover and monitor new components 

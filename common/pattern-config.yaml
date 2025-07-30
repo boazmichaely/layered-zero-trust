@@ -1,0 +1,265 @@
+# Layered Zero Trust Pattern Configuration
+# This file defines all components and their discovery/monitoring patterns
+
+# Pattern metadata
+pattern:
+  name: "layered-zero-trust"
+  display_name: "Layered Zero Trust"
+  
+# Component categories and definitions
+categories:
+  infrastructure:
+    title: "INFRASTRUCTURE"
+    description: "Core pattern foundation components"
+    components:
+      - id: "pattern-cr"
+        name: "Pattern CR"
+        namespace: "openshift-operators"
+        version_source: 
+          type: "values-global"
+          key: "clusterGroupChartVersion"
+          git_info: true
+        monitor_type: "pattern-cr"
+        
+      - id: "patterns-operator"
+        name: "Patterns Operator"
+        namespace: "openshift-operators"
+        version_source:
+          type: "make-show"
+          key: "channel"
+          fallback: "container failed"
+        monitor_type: "subscription"
+        subscription_name: "patterns-operator"
+        
+      - id: "gitops-operator"
+        name: "GitOps Operator"
+        namespace: "openshift-operators"
+        version_source:
+          type: "make-show"
+          key: "gitops.channel"
+          fallback: "container failed"
+        monitor_type: "subscription"
+        subscription_name: "openshift-gitops-operator"
+
+  operators:
+    title: "OPERATORS INSTALLED BY THE PATTERN"
+    description: "Kubernetes operators managed by subscriptions"
+    components:
+      - id: "cert-manager-op"
+        name: "Cert Manager Operator"
+        namespace: "cert-manager-operator"
+        version_source:
+          type: "values-hub"
+          key: "cert-manager.channel"
+          fallback: "unknown"
+        monitor_type: "subscription"
+        subscription_name: "openshift-cert-manager-operator"
+        
+      - id: "keycloak-op"
+        name: "Keycloak Operator"
+        namespace: "keycloak-system"
+        version_source:
+          type: "values-hub"
+          key: "rhbk.channel"
+          fallback: "unknown"
+        monitor_type: "subscription"
+        subscription_name: "rhbk-operator"
+        
+      - id: "spire-op"
+        name: "Zero Trust Workload Identity Manager Operator"
+        namespace: "zero-trust-workload-identity-manager"
+        version_source:
+          type: "values-hub"
+          key: "zero-trust-workload-identity-manager.channel"
+          fallback: "unknown"
+        monitor_type: "subscription"
+        subscription_name: "openshift-zero-trust-workload-identity-manager"
+        
+      - id: "compliance-op"
+        name: "Compliance Operator"
+        namespace: "openshift-compliance"
+        version_source:
+          type: "values-hub"
+          key: "compliance-operator.channel"
+          fallback: "unknown"
+        monitor_type: "subscription"
+        subscription_name: "compliance-operator"
+
+  applications:
+    title: "ZERO TRUST COMPONENTS (INSTALLED WITH ARGOCD)"
+    description: "Applications deployed via ArgoCD"
+    version_column_title: "HELM CHART VERSION"
+    components:
+      - id: "vault-app"
+        name: "HashiCorp Vault"
+        namespace: "vault"
+        version_source:
+          type: "values-hub"
+          key: "vault.chartVersion"
+          chart_prefix: "hashicorp-vault"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "vault"
+        
+      - id: "eso-app"
+        name: "Golang External Secrets"
+        namespace: "golang-external-secrets"
+        version_source:
+          type: "values-hub"
+          key: "golang-external-secrets.chartVersion"
+          chart_prefix: "golang-external-secrets"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "golang-external-secrets"
+        
+      - id: "keycloak-app"
+        name: "Red Hat Keycloak"
+        namespace: "keycloak-system"
+        version_source:
+          type: "values-hub"
+          key: "rh-keycloak.chartVersion"
+          chart_prefix: "rh-keycloak"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "rh-keycloak"
+        
+      - id: "cert-manager-app"
+        name: "Red Hat Cert Manager"
+        namespace: "cert-manager"
+        version_source:
+          type: "values-hub"
+          key: "rh-cert-manager.chartVersion"
+          chart_prefix: "rh-cert-manager"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "rh-cert-manager"
+        
+      - id: "spire-app"
+        name: "Zero Trust SPIRE/SPIFFE"
+        namespace: "zero-trust-workload-identity-manager"
+        version_source:
+          type: "values-hub"
+          key: "zero-trust-workload-identity-manager.chartVersion"
+          chart_prefix: "zero-trust-workload-identity-manager"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "zero-trust-workload-identity-manager"
+
+# Special components
+special_components:
+  secrets:
+    id: "secrets"
+    name: "Secrets Loading"
+    description: "Loading secrets before ArgoCD applications start syncing"
+    monitor_type: "script"
+    script_command: "common/scripts/process-secrets.sh"
+
+# Discovery configuration
+discovery:
+  version_sources:
+    values-global:
+      file: "values-global.yaml"
+      format: "yaml"
+    values-hub:
+      file: "values-hub.yaml"
+      format: "yaml"
+    make-show:
+      command: "./pattern.sh make show"
+      timeout: 30
+      fallback_message: "container failed"
+    local-chart:
+      pattern: "charts/{app_name}/Chart.yaml"
+      key: "version"
+
+# Monitoring configuration
+monitoring:
+  timeouts:
+    subscription_appear: 300    # 5 minutes
+    subscription_install: 600   # 10 minutes
+    argocd_appear: 180         # 3 minutes
+    argocd_sync: 900           # 15 minutes
+    pattern_deploy: 600        # 10 minutes
+  
+  intervals:
+    check_interval: 10         # seconds between checks
+    dashboard_update: 15       # seconds between dashboard updates
+  
+  retries:
+    helm_deploy: 10
+    helm_wait: 15
+
+# Uninstall configuration
+uninstall:
+  # Order matters! Components are deleted in this exact order
+  deletion_order:
+    - step: "argocd_applications"
+      description: "ArgoCD Applications (children first, then parent)"
+      components:
+        # Delete child applications first (reverse installation order)
+        - "spire-app"
+        - "cert-manager-app"
+        - "keycloak-app"
+        - "eso-app"
+        - "vault-app"
+        # Then delete parent application last
+        - pattern_name: "{pattern-name}-hub"
+          namespace: "openshift-gitops"
+    
+    - step: "gitops_operator"
+      description: "GitOps Operator"
+      components:
+        - "gitops-operator"
+    
+    - step: "other_operators"
+      description: "Other Operators"
+      components:
+        - "compliance-op"
+        - "spire-op"
+        - "keycloak-op"
+        - "cert-manager-op"
+    
+    - step: "patterns_operator"
+      description: "Patterns Operator"
+      components:
+        - "patterns-operator"
+    
+    - step: "namespaces"
+      description: "Pattern Namespaces"
+      # Extracted from current script
+      namespaces:
+        - "vault"
+        - "keycloak-system"
+        - "cert-manager"
+        - "cert-manager-operator"
+        - "golang-external-secrets"
+        - "zero-trust-workload-identity-manager"
+        - "layered-zero-trust-hub"
+    
+    - step: "pattern_cr"
+      description: "Pattern Custom Resource"
+      components:
+        - "pattern-cr"
+
+  # Resource patterns for cleanup detection
+  cleanup_patterns:
+    subscriptions: "(cert-manager|rhbk|compliance|zero-trust)"
+    csvs: "(cert-manager|keycloak|rhbk|compliance|zero-trust)"
+    namespaces: "(vault|keycloak|cert-manager|zero-trust|external-secrets)"
+
+# Display configuration
+display:
+  column_widths:
+    name: 50
+    namespace: 40
+    version: 40
+  
+  table_separators:
+    header: "--------------------------------------------------"
+    namespace: "----------------------------------------"
+    version: "----------------------------------------"
+  
+  dashboard:
+    max_wait: 1800           # 30 minutes total
+    clear_screen: true
+    show_elapsed: true
+    show_progress_stats: true 
