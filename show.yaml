@@ -1,0 +1,54 @@
+make -f common/Makefile show
+make[1]: Entering directory '/Users/bmichael/code/GitHub/ZTVP/layered-zero-trust'
+helm template oci://quay.io/hybridcloudpatterns/pattern-install --name-template layered-zero-trust -f values-global.yaml --set main.git.repoURL="https://github.com/boazmichaely/layered-zero-trust.git" --set main.git.revision=my-branch   
+Pulled: quay.io/hybridcloudpatterns/pattern-install:0.0.7
+Digest: sha256:b845f86c735478cfd44b0b43842697851cec64737c737bd18a872fa86bb0484d
+---
+# Source: pattern-install/templates/pattern-operator-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: patterns-operator-config
+  namespace: openshift-operators
+data:
+  gitops.catalogSource: redhat-operators
+  gitops.channel: gitops-1.15
+  gitea.chartName: gitea
+  gitea.helmRepoUrl: https://charts.validatedpatterns.io/
+  gitea.chartVersion: 0.0.*
+
+  # gitops.sourceNamespace: GitOpsDefaultCatalogSourceNamespace
+  # gitops.installApprovalPlan: GitOpsDefaultApprovalPlan
+  # gitops.ManualSync: GitOpsDefaultManualSync
+  # gitops.name: GitOpsDefaultPackageName
+---
+# Source: pattern-install/templates/pattern.yaml
+apiVersion: gitops.hybrid-cloud-patterns.io/v1alpha1
+kind: Pattern
+metadata:
+  name: layered-zero-trust
+  namespace: openshift-operators
+spec:
+  clusterGroupName: hub
+  gitSpec: 
+    targetRepo: https://github.com/boazmichaely/layered-zero-trust.git
+    targetRevision: my-branch 
+  multiSourceConfig:
+    enabled: true 
+    clusterGroupChartVersion: 0.9.*
+---
+# Source: pattern-install/templates/subscription.yaml
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: patterns-operator
+  namespace: openshift-operators
+  labels:
+    operators.coreos.com/patterns-operator.openshift-operators: ""
+spec:
+  channel: fast
+  installPlanApproval: Automatic
+  name: patterns-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+make[1]: Leaving directory '/Users/bmichael/code/GitHub/ZTVP/layered-zero-trust'

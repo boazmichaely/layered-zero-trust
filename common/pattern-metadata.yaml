@@ -11,14 +11,20 @@ pattern:
 # Introduction sections for different operations
 introductions:
   install:
-    title: "{pattern_display_name} - ASYNC INSTALLATION PLAN"
+    title: "{pattern_display_name} - INSTALLATION PLAN"
     overview: |
-      The following components will be monitored in parallel:
+      The following tasks will be executed first:
+      
+      INFO: The following tasks will be executed in parallel and monitored:
+      
+      INFO: Install Operators:
+      
+      INFO: Install ArgoCD applications:
     
     deployment_flow:
       title: "DEPLOYMENT FLOW:"
       description: |
-        Pattern CR → Secrets Loading → Patterns Operator → GitOps + Direct Operators → ArgoCD Applications → Component Deployment
+        Vault → Secrets Loading → Operators (parallel) → Pattern CR (ArgoCD App Factory) → ArgoCD Applications (parallel) → Component Deployment
 
   uninstall:
     title: "VERBOSE PATTERN UNINSTALL v3.8 (COMPLETE-ARGOCD-AWARE)"

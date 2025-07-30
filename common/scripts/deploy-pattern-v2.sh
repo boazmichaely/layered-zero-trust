@@ -2,7 +2,7 @@
 set -o pipefail
 
 # New Config-Driven Deploy Script v2.0
-# Uses shared pattern library for configuration-driven pattern deployment
+# Uses shared pattern library for 5-stage deployment architecture
 
 # Get script directory and source the shared library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,32 +33,55 @@ main() {
     # Show component plan and get confirmation
     print_component_tables "install"
     
-    # Skip confirmation in dry-run mode
+    # Skip deployment in dry-run mode
     if [ "$dry_run" = true ]; then
         echo "✓ DRY RUN: Skipping confirmation and actual deployment"
         echo "✓ Configuration loaded successfully - all systems ready!"
+        echo "✓ New 5-stage deployment architecture validated!"
         exit 0
     fi
     
     ask_confirmation "install"
     
-    # Deploy core pattern infrastructure
-    if ! deploy_core_pattern "$name" "$chart" $helm_opts; then
-        print_error "Core pattern deployment failed. Aborting."
+    # 5-STAGE DEPLOYMENT ARCHITECTURE
+    
+    # Stage 1: Deploy Vault
+    if ! deploy_vault; then
+        print_error "Stage 1 failed: Vault deployment failed. Aborting."
         exit 1
     fi
     
-    # Load secrets BEFORE starting application monitoring
-    load_secrets "$name"
+    # Stage 2: Load secrets into Vault
+    if ! load_secrets "$name"; then
+        print_error "Stage 2 failed: Secrets loading failed. Aborting."
+        exit 1
+    fi
     
-    # Start all background monitors
-    start_all_monitors
+    # Stage 3: Deploy operators in parallel and wait for readiness
+    if ! deploy_operators_parallel; then
+        print_error "Stage 3 failed: Operators deployment failed. Aborting."
+        exit 1
+    fi
     
-    # Show live dashboard
+    # Stage 4: Deploy Pattern CR (ArgoCD App Factory)
+    if ! deploy_pattern_controller "$name" "$chart" $helm_opts; then
+        print_error "Stage 4 failed: Pattern CR deployment failed. Aborting."
+        exit 1
+    fi
+    
+    # Stage 5: Monitor ArgoCD applications in parallel
+    if ! deploy_applications_parallel; then
+        print_error "Stage 5 failed: Applications monitoring failed. Aborting."
+        exit 1
+    fi
+    
+    # Show live dashboard for final application status
     show_live_dashboard
     
     # Show final summary and exit with appropriate code
     if print_final_summary; then
+        print_success "🎉 All 5 stages completed successfully!"
+        print_success "✅ Vault → Secrets → Operators → Pattern CR → Applications"
         exit 0
     else
         exit 1

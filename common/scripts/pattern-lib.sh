@@ -185,6 +185,13 @@ load_components() {
         done
     done
     
+    # Load pattern controller separately (not in categories)
+    local pattern_cr_id=$(grep -A 10 "^pattern_controller:" "$PATTERN_CONFIG_FILE" 2>/dev/null | grep "id:" | awk '{print $2}' | tr -d '"')
+    if [ -n "$pattern_cr_id" ]; then
+        COMPONENTS["$pattern_cr_id"]="pattern_controller"
+        load_component_details "$pattern_cr_id" "pattern_controller"
+    fi
+    
     print_success "Loaded ${#COMPONENTS[@]} component definitions"
     return 0
 }
@@ -194,19 +201,54 @@ load_component_details() {
     local comp_id="$1"
     local category="$2"
     
-    # Extract component details from YAML (simplified parsing)
-    local comp_section=$(sed -n "/id: \"$comp_id\"/,/^      - id:/p" "$PATTERN_CONFIG_FILE" 2>/dev/null)
-    
-    # Parse key fields
-    COMPONENTS["${comp_id}_name"]=$(echo "$comp_section" | grep "name:" | head -1 | sed 's/.*name: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_namespace"]=$(echo "$comp_section" | grep "namespace:" | head -1 | sed 's/.*namespace: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_monitor_type"]=$(echo "$comp_section" | grep "monitor_type:" | head -1 | sed 's/.*monitor_type: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_subscription_name"]=$(echo "$comp_section" | grep "subscription_name:" | head -1 | sed 's/.*subscription_name: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_argocd_app_name"]=$(echo "$comp_section" | grep "argocd_app_name:" | head -1 | sed 's/.*argocd_app_name: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_version_type"]=$(echo "$comp_section" | grep "type:" | head -1 | sed 's/.*type: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_version_key"]=$(echo "$comp_section" | grep "key:" | head -1 | sed 's/.*key: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_version_fallback"]=$(echo "$comp_section" | grep "fallback:" | head -1 | sed 's/.*fallback: *//' | tr -d '"')
-    COMPONENTS["${comp_id}_chart_prefix"]=$(echo "$comp_section" | grep "chart_prefix:" | head -1 | sed 's/.*chart_prefix: *//' | tr -d '"')
+    # Extract component details - different approach for pattern_controller
+    if [ "$category" = "pattern_controller" ]; then
+        # Direct extraction for pattern_controller - fix the parsing paths
+        local pattern_section=$(sed -n '/^pattern_controller:/,/^[a-z]/p' "$PATTERN_CONFIG_FILE" | sed '/^[a-z]/d')
+        
+        COMPONENTS["${comp_id}_name"]=$(echo "$pattern_section" | grep "name:" | sed 's/.*name: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_namespace"]=$(echo "$pattern_section" | grep "namespace:" | sed 's/.*namespace: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_monitor_type"]=$(echo "$pattern_section" | grep "monitor_type:" | sed 's/.*monitor_type: *"//' | sed 's/"$//' | head -1)
+        
+        # Version source details
+        COMPONENTS["${comp_id}_version_type"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "type:" | sed 's/.*type: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_version_key"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "key:" | sed 's/.*key: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_version_fallback"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "fallback:" | sed 's/.*fallback: *"//' | sed 's/"$//' | head -1)
+        
+    else
+        # For regular categories, find the component in the category's components array
+        local component_section=$(sed -n "/^  $category:/,/^  [a-z]/p" "$PATTERN_CONFIG_FILE" | sed -n "/id: \"$comp_id\"/,/- id:/p" | sed '$d')
+        
+        # Extract name (handle multi-word names properly, clean up extra text)
+        local name=$(echo "$component_section" | grep "name:" | sed 's/.*name: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_name"]="$name"
+        
+        # Extract namespace
+        local namespace=$(echo "$component_section" | grep "namespace:" | sed 's/.*namespace: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_namespace"]="$namespace"
+        
+        # Extract monitor type
+        local monitor_type=$(echo "$component_section" | grep "monitor_type:" | sed 's/.*monitor_type: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_monitor_type"]="$monitor_type"
+        
+        # Version source details
+        local version_type=$(echo "$component_section" | grep -A 5 "version_source:" | grep "type:" | sed 's/.*type: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_version_type"]="$version_type"
+        COMPONENTS["${comp_id}_version_key"]=$(echo "$component_section" | grep -A 5 "version_source:" | grep "key:" | sed 's/.*key: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_version_fallback"]=$(echo "$component_section" | grep -A 5 "version_source:" | grep "fallback:" | sed 's/.*fallback: *"//' | sed 's/"$//' | head -1)
+        
+        # Subscription details (if applicable)
+        local subscription_name=$(echo "$component_section" | grep "subscription_name:" | sed 's/.*subscription_name: *"//' | sed 's/"$//' | head -1)
+        if [ -n "$subscription_name" ]; then
+            COMPONENTS["${comp_id}_subscription_name"]="$subscription_name"
+        fi
+        
+        # ArgoCD details (if applicable)
+        local argocd_app_name=$(echo "$component_section" | grep "argocd_app_name:" | sed 's/.*argocd_app_name: *"//' | sed 's/"$//' | head -1)
+        if [ -n "$argocd_app_name" ]; then
+            COMPONENTS["${comp_id}_argocd_app_name"]="$argocd_app_name"
+        fi
+    fi
 }
 
 # =============================================================================
@@ -338,49 +380,52 @@ get_chart_version() {
 
 # Print component tables for install/uninstall preview
 print_component_tables() {
-    local operation="${1:-install}"
+    local operation="$1"
     
-    # Get pattern display name
-    local pattern_display_name="${PATTERN_CONFIG[display_name]}"
-    local title_template="$pattern_display_name - ASYNC INSTALLATION PLAN"
-    if [ "$operation" = "uninstall" ]; then
-        title_template="VERBOSE PATTERN UNINSTALL v3.8 (COMPLETE-ARGOCD-AWARE) - INITIAL STATE CHECK"
-    fi
-    
-    print_header "$title_template"
+    # Print pattern info - fix the display name
+    local pattern_display_name="${PATTERN_CONFIG[display_name]:-Layered Zero Trust}"
+    print_header "$pattern_display_name - INSTALLATION PLAN"
     
     if [ "$operation" = "install" ]; then
-        print_info "The following components will be monitored in parallel:"
+        # Print the staged introduction text
+        print_info "The following tasks will be executed first:"
         echo
-    fi
-    
-    # Track printed categories to avoid duplicates
-    local -a PRINTED_CATEGORIES=()
-    
-    # Print each category (dynamically from config)
-    for comp_id in "${!COMPONENTS[@]}"; do
-        if [[ "$comp_id" != *_* ]]; then
-            local category="${COMPONENTS[$comp_id]}"
-            if [ -n "$category" ]; then
-                # Track unique categories
-                local found=false
-                for existing_cat in "${PRINTED_CATEGORIES[@]:-}"; do
-                    if [ "$existing_cat" = "$category" ]; then
-                        found=true
-                        break
-                    fi
-                done
-                if [ "$found" = false ]; then
-                    PRINTED_CATEGORIES+=("$category")
-                    print_category_table "$category"
-                fi
-            fi
-        fi
-    done
-    
-    if [ "$operation" = "install" ]; then
+        
+        # Stage 1-2: Infrastructure (display first - Vault only)
+        print_category_table "infrastructure"
+        echo
+        
+        print_info "Load secrets into Vault"
+        printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "VERSION"
+        printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
+        printf "%-50s | %-40s | %s\n" "Load secrets into Vault" "N/A" "N/A"
+        echo
+        
+        print_info "The following tasks will be executed in parallel and monitored:"
+        echo
+        
+        # Stage 3: Operators
+        print_info "Install Operators:"
+        print_category_table "operators"
+        echo
+        
+        # Stage 4: Pattern CR (ArgoCD App Factory)
+        print_info "Deploy Pattern CR (ArgoCD App Factory):"
+        local pattern_cr_name="${COMPONENTS[pattern-cr_name]:-Pattern CR (ArgoCD App Factory)}"
+        local pattern_cr_namespace="${COMPONENTS[pattern-cr_namespace]:-openshift-operators}"
+        local pattern_cr_version=$(get_component_version "pattern-cr")
+        printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "VERSION"
+        printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
+        printf "%-50s | %-40s | %s\n" "$pattern_cr_name" "$pattern_cr_namespace" "$pattern_cr_version"
+        echo
+        
+        # Stage 5: Applications
+        print_info "Install ArgoCD applications:"
+        print_category_table "applications"
+        echo
+        
         print_info "DEPLOYMENT FLOW:"
-        echo "  Pattern CR + Vault → Secrets Loading → Patterns Operator → GitOps + Direct Operators → ArgoCD Applications → Component Deployment"
+        echo "  Vault → Secrets Loading → Operators (parallel) → Pattern CR (ArgoCD App Factory) → ArgoCD Applications (parallel) → Component Deployment"
         echo
     fi
 }
@@ -388,40 +433,54 @@ print_component_tables() {
 # Print a single category table
 print_category_table() {
     local category="$1"
-    local col_width_name="${PATTERN_CONFIG[col_width_name]}"
-    local col_width_namespace="${PATTERN_CONFIG[col_width_namespace]}"
-    local col_width_version="${PATTERN_CONFIG[col_width_version]}"
     
-    # Get category title from config (NO HARDCODING!)
-    local category_title=$(parse_yaml_value "$PATTERN_CONFIG_FILE" "categories.${category}.title" "$category")
-    if [ "$category_title" = "$category" ]; then
-        # Fallback if not found in config
-        category_title="$(echo "$category" | tr '[:lower:]' '[:upper:]')"
+    # Get category title from config
+    local title=""
+    case "$category" in
+        "infrastructure")
+            title="INFRASTRUCTURE"
+            ;;
+        "operators") 
+            title="OPERATORS INSTALLED BY THE PATTERN"
+            ;;
+        "applications")
+            title="ZERO TRUST COMPONENTS (INSTALLED WITH ARGOCD)"
+            ;;
+        *)
+            title=$(echo "$category" | tr '[:lower:]' '[:upper:]')
+            ;;
+    esac
+    
+    print_info "$title:"
+    
+    # Check if this is applications category to get version column title
+    local version_header="VERSION"
+    if [ "$category" = "applications" ]; then
+        version_header="HELM CHART VERSION"
     fi
     
-    print_info "$category_title:"
+    # Table header
+    printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "$version_header"
+    printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
     
-    # Print table header (get from config)
-    local version_header=$(parse_yaml_value "$PATTERN_CONFIG_FILE" "categories.${category}.version_column_title" "VERSION")
-    
-    printf "%-${col_width_name}s | %-${col_width_namespace}s | %s\n" "NAME" "NAMESPACE" "$version_header"
-    printf "%-${col_width_name}s | %-${col_width_namespace}s | %s\n" \
-        "$(printf '%*s' "$col_width_name" '' | tr ' ' '-')" \
-        "$(printf '%*s' "$col_width_namespace" '' | tr ' ' '-')" \
-        "$(printf '%*s' "$col_width_version" '' | tr ' ' '-')"
-    
-    # Print components for this category
+    # Print components in this category
     for comp_id in "${!COMPONENTS[@]}"; do
         if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "$category" ]; then
-            local comp_name="${COMPONENTS[${comp_id}_name]}"
-            local comp_namespace="${COMPONENTS[${comp_id}_namespace]}"
-            local comp_version=$(get_component_version "$comp_id")
+            local name="${COMPONENTS[${comp_id}_name]}"
+            local namespace="${COMPONENTS[${comp_id}_namespace]}"
+            local version=$(get_component_version "$comp_id")
             
-            printf "%-${col_width_name}s | %-${col_width_namespace}s | %s\n" "$comp_name" "$comp_namespace" "$comp_version"
+            # Ensure we have values (debugging)
+            if [ -z "$name" ]; then
+                name="[NAME NOT FOUND: $comp_id]"
+            fi
+            if [ -z "$namespace" ]; then
+                namespace="[NAMESPACE NOT FOUND]"
+            fi
+            
+            printf "%-50s | %-40s | %s\n" "$name" "$namespace" "$version"
         fi
     done
-    
-    echo
 }
 
 # =============================================================================
@@ -741,46 +800,15 @@ count_total_components() {
 # INSTALLATION FUNCTIONS
 # =============================================================================
 
-# Deploy core pattern using helm
-deploy_core_pattern() {
-    local name="$1"
-    local chart="$2"
-    shift 2
-    local helm_opts="$*"
+# Deploy Vault (Stage 1)
+deploy_vault() {
+    print_header "STAGE 1: DEPLOYING HASHICORP VAULT"
+    print_info "Installing HashiCorp Vault for secrets storage..."
     
-    print_header "DEPLOYING CORE PATTERN INFRASTRUCTURE + VAULT"
-    print_info "Installing pattern base infrastructure and HashiCorp Vault..."
-    
-    update_status "pattern-cr" "DEPLOYING" "Installing helm chart"
+    update_status "vault-app" "DEPLOYING" "Installing HashiCorp Vault"
     
     local runs="${PATTERN_CONFIG[helm_deploy_retries]:-10}"
     local wait="${PATTERN_CONFIG[helm_wait_seconds]:-15}"
-    
-    # Deploy Pattern CR first
-    for i in $(seq 1 ${runs}); do
-        exec 3>&1 4>&2
-        OUT=$( { helm template --include-crds --name-template $name $chart $helm_opts 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
-        ret=$?
-        exec 3>&- 4>&-
-        if [ ${ret} -eq 0 ]; then
-            break;
-        else
-            echo -n "."
-            sleep "${wait}"
-        fi
-    done
-
-    if [ ${i} -eq ${runs} ]; then
-        update_status "pattern-cr" "FAILED" "Deployment failed after ${runs} attempts: $OUT"
-        print_error "Core pattern deployment failed"
-        return 1
-    fi
-    
-    update_status "pattern-cr" "SUCCESS" "Pattern CR deployed successfully"
-    print_success "Pattern CR deployed - now deploying Vault..."
-    
-    # Deploy Vault immediately after Pattern CR
-    update_status "vault-app" "DEPLOYING" "Installing HashiCorp Vault"
     
     # Get Vault chart version from config
     local vault_version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.vault.chartVersion" "0.1.*")
@@ -807,7 +835,7 @@ deploy_core_pattern() {
     fi
     
     update_status "vault-app" "SUCCESS" "Vault deployed successfully"
-    print_success "Core infrastructure + Vault deployed - waiting for Vault to be ready..."
+    print_success "Vault deployed successfully - waiting for readiness..."
     
     # Wait for Vault to be ready before proceeding
     wait_for_vault_ready
@@ -847,22 +875,155 @@ wait_for_vault_ready() {
     return 0  # Don't fail the deployment, just warn
 }
 
-# Load secrets before application monitoring
+# Load secrets into Vault (Stage 2)
 load_secrets() {
     local pattern_name="$1"
     
-    print_header "LOADING SECRETS (BEFORE APPLICATION MONITORING)"
-    print_info "Loading secrets before ArgoCD applications start syncing..."
+    print_header "STAGE 2: LOADING SECRETS INTO VAULT"
+    print_info "Processing and loading secrets for pattern: $pattern_name"
     
-    update_status "secrets" "LOADING" "Processing secrets"
-    
-    if common/scripts/process-secrets.sh "$pattern_name"; then
-        update_status "secrets" "SUCCESS" "Secrets loaded successfully"
-        print_success "Secrets loaded successfully"
-    else
-        update_status "secrets" "FAILED" "Secrets loading failed"
-        print_error "Secrets loading failed"
+    # Check if secrets script exists
+    local secrets_script="$SCRIPT_DIR/process-secrets.sh"
+    if [ ! -f "$secrets_script" ]; then
+        print_warning "Secrets script not found at $secrets_script, skipping secrets loading"
+        return 0
     fi
+    
+    print_info "Running secrets processing script..."
+    if ! bash "$secrets_script"; then
+        print_error "Secrets loading failed"
+        return 1
+    fi
+    
+    print_success "Secrets loaded successfully into Vault"
+    return 0
+}
+
+# Deploy operators in parallel and wait for readiness (Stage 3)
+deploy_operators_parallel() {
+    print_header "STAGE 3: DEPLOYING OPERATORS (PARALLEL)"
+    print_info "Installing all operators in parallel, then waiting for readiness..."
+    
+    local operator_components=()
+    
+    # Collect operator components from config
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "operators" ]; then
+            operator_components+=("$comp_id")
+        fi
+    done
+    
+    if [ ${#operator_components[@]} -eq 0 ]; then
+        print_warning "No operator components found"
+        return 0
+    fi
+    
+    # Start monitoring all operators in parallel
+    for comp_id in "${operator_components[@]}"; do
+        start_subscription_monitor "$comp_id" &
+    done
+    
+    # Wait for all operators to be ready
+    print_info "Waiting for all ${#operator_components[@]} operators to be ready..."
+    
+    local all_ready=false
+    local timeout=1800  # 30 minutes
+    local elapsed=0
+    local check_interval=15
+    
+    while [ $elapsed -lt $timeout ] && [ "$all_ready" = false ]; do
+        all_ready=true
+        
+        for comp_id in "${operator_components[@]}"; do
+            local status=$(get_status "$comp_id" "status")
+            if [ "$status" != "SUCCESS" ]; then
+                all_ready=false
+                break
+            fi
+        done
+        
+        if [ "$all_ready" = false ]; then
+            sleep $check_interval
+            elapsed=$((elapsed + check_interval))
+        fi
+    done
+    
+    if [ "$all_ready" = true ]; then
+        print_success "All operators deployed and ready!"
+        return 0
+    else
+        print_error "Operators readiness timeout after $((timeout/60)) minutes"
+        return 1
+    fi
+}
+
+# Deploy Pattern CR - ArgoCD App Factory (Stage 4)
+deploy_pattern_controller() {
+    local name="$1"
+    local chart="$2"
+    shift 2
+    local helm_opts="$*"
+    
+    print_header "STAGE 4: DEPLOYING PATTERN CR (ARGOCD APP FACTORY)"
+    print_info "Installing Pattern CR to create ArgoCD applications..."
+    
+    update_status "pattern-cr" "DEPLOYING" "Installing helm chart"
+    
+    local runs="${PATTERN_CONFIG[helm_deploy_retries]:-10}"
+    local wait="${PATTERN_CONFIG[helm_wait_seconds]:-15}"
+    
+    # Deploy Pattern CR
+    for i in $(seq 1 ${runs}); do
+        exec 3>&1 4>&2
+        OUT=$( { helm template --include-crds --name-template $name $chart $helm_opts 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
+        ret=$?
+        exec 3>&- 4>&-
+        if [ ${ret} -eq 0 ]; then
+            break;
+        else
+            echo -n "."
+            sleep "${wait}"
+        fi
+    done
+
+    if [ ${i} -eq ${runs} ]; then
+        update_status "pattern-cr" "FAILED" "Deployment failed after ${runs} attempts: $OUT"
+        print_error "Pattern CR deployment failed"
+        return 1
+    fi
+    
+    update_status "pattern-cr" "SUCCESS" "Pattern CR deployed successfully"
+    print_success "Pattern CR (ArgoCD App Factory) deployed - ArgoCD applications are now being created!"
+    
+    return 0
+}
+
+# Deploy applications in parallel (Stage 5)
+deploy_applications_parallel() {
+    print_header "STAGE 5: MONITORING ARGOCD APPLICATIONS (PARALLEL)"
+    print_info "Monitoring ArgoCD applications created by Pattern CR..."
+    
+    local app_components=()
+    
+    # Collect application components from config
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "applications" ]; then
+            app_components+=("$comp_id")
+        fi
+    done
+    
+    if [ ${#app_components[@]} -eq 0 ]; then
+        print_warning "No application components found"
+        return 0
+    fi
+    
+    # Start monitoring all applications in parallel
+    for comp_id in "${app_components[@]}"; do
+        start_argocd_monitor "$comp_id" &
+    done
+    
+    print_success "Started monitoring ${#app_components[@]} ArgoCD applications in parallel"
+    return 0
 }
 
 # Start all component monitors
@@ -1085,6 +1246,8 @@ export -f print_component_tables
 export -f update_status get_status
 export -f start_component_monitor start_all_monitors
 export -f show_live_dashboard print_final_summary
-export -f deploy_core_pattern load_secrets
+export -f deploy_vault load_secrets
+export -f deploy_operators_parallel deploy_pattern_controller
+export -f deploy_applications_parallel
 export -f check_uninstall_state ask_confirmation
 export -f init_pattern_lib 

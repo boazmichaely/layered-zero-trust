@@ -12,35 +12,6 @@ categories:
     title: "INFRASTRUCTURE"
     description: "Core pattern foundation components"
     components:
-      - id: "pattern-cr"
-        name: "Pattern CR"
-        namespace: "openshift-operators"
-        version_source: 
-          type: "values-global"
-          key: "clusterGroupChartVersion"
-          git_info: true
-        monitor_type: "pattern-cr"
-        
-      - id: "patterns-operator"
-        name: "Patterns Operator"
-        namespace: "openshift-operators"
-        version_source:
-          type: "make-show"
-          key: "channel"
-          fallback: "container failed"
-        monitor_type: "subscription"
-        subscription_name: "patterns-operator"
-        
-      - id: "gitops-operator"
-        name: "GitOps Operator"
-        namespace: "openshift-operators"
-        version_source:
-          type: "make-show"
-          key: "gitops.channel"
-          fallback: "container failed"
-        monitor_type: "subscription"
-        subscription_name: "openshift-gitops-operator"
-        
       - id: "vault-app"
         name: "HashiCorp Vault"
         namespace: "vault"
@@ -49,12 +20,22 @@ categories:
           key: "clusterGroup.applications.vault.chartVersion"
           chart_prefix: "hashicorp-vault"
           fallback: "0.1.*"
-        monitor_type: "pattern-cr"
+        monitor_type: "vault-direct"
 
   operators:
     title: "OPERATORS INSTALLED BY THE PATTERN"
     description: "Kubernetes operators managed by subscriptions"
     components:
+      - id: "gitops-operator"
+        name: "GitOps (ArgoCD) Operator"
+        namespace: "openshift-operators"
+        version_source:
+          type: "make-show"
+          key: "gitops.channel"
+          fallback: "container failed"
+        monitor_type: "subscription"
+        subscription_name: "openshift-gitops-operator"
+        
       - id: "cert-manager-op"
         name: "Cert Manager Operator"
         namespace: "cert-manager-operator"
@@ -76,7 +57,7 @@ categories:
         subscription_name: "rhbk-operator"
         
       - id: "spire-op"
-        name: "Zero Trust Workload Identity Manager Operator"
+        name: "ZT WIM (SPIRE) Operator"
         namespace: "zero-trust-workload-identity-manager"
         version_source:
           type: "values-hub"
@@ -101,7 +82,7 @@ categories:
     version_column_title: "HELM CHART VERSION"
     components:
       - id: "eso-app"
-        name: "Golang External Secrets"
+        name: "External Secrets Operator (ESO) instance"
         namespace: "golang-external-secrets"
         version_source:
           type: "values-hub"
@@ -111,19 +92,8 @@ categories:
         monitor_type: "argocd"
         argocd_app_name: "golang-external-secrets"
         
-      - id: "keycloak-app"
-        name: "Red Hat Keycloak"
-        namespace: "keycloak-system"
-        version_source:
-          type: "values-hub"
-          key: "rh-keycloak.chartVersion"
-          chart_prefix: "rh-keycloak"
-          fallback: "unknown"
-        monitor_type: "argocd"
-        argocd_app_name: "rh-keycloak"
-        
       - id: "cert-manager-app"
-        name: "Red Hat Cert Manager"
+        name: "Red Hat Cert Manager instance"
         namespace: "cert-manager"
         version_source:
           type: "values-hub"
@@ -133,8 +103,19 @@ categories:
         monitor_type: "argocd"
         argocd_app_name: "rh-cert-manager"
         
+      - id: "keycloak-app"
+        name: "Red Hat Keycloak instance"
+        namespace: "keycloak-system"
+        version_source:
+          type: "values-hub"
+          key: "rh-keycloak.chartVersion"
+          chart_prefix: "rh-keycloak"
+          fallback: "unknown"
+        monitor_type: "argocd"
+        argocd_app_name: "rh-keycloak"
+        
       - id: "spire-app"
-        name: "Zero Trust SPIRE/SPIFFE"
+        name: "ZT WIM (Spire) instance"
         namespace: "zero-trust-workload-identity-manager"
         version_source:
           type: "values-hub"
@@ -143,6 +124,17 @@ categories:
           fallback: "unknown"
         monitor_type: "argocd"
         argocd_app_name: "zero-trust-workload-identity-manager"
+
+# Pattern CR - separate from categories as it's the ArgoCD App Factory
+pattern_controller:
+  id: "pattern-cr"
+  name: "Pattern CR (ArgoCD App Factory)"
+  namespace: "openshift-operators"
+  version_source: 
+    type: "values-global"
+    key: "clusterGroupChartVersion"
+    git_info: true
+  monitor_type: "pattern-cr"
 
 # Special components
 special_components:
