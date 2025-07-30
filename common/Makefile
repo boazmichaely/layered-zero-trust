@@ -92,6 +92,22 @@ uninstall: ## runs helm uninstall
 	helm uninstall $(NAME)
 	@oc delete csv -n openshift-operators $(CSV)
 
+.PHONY: uninstall-verbose
+uninstall-verbose: ## runs robust pattern uninstall (handles stuck finalizers and cleanup issues)
+	@common/scripts/uninstall-pattern-verbose.sh $(NAME)
+
+# Set DRY_RUN to 1 for safe testing
+DRY_RUN ?= 0
+DRY_RUN_FLAG = $(if $(filter 1,$(DRY_RUN)),--dry-run,)
+
+.PHONY: install-verbose-v2
+install-verbose-v2: ## runs NEW config-driven async pattern installation (use DRY_RUN=1 for safe testing)
+	@common/scripts/deploy-pattern-v2.sh $(DRY_RUN_FLAG) $(NAME) common/install-site.yaml $(HELM_OPTS)
+
+.PHONY: uninstall-verbose-v2  
+uninstall-verbose-v2: ## runs NEW config-driven pattern uninstall (use DRY_RUN=1 for safe testing)
+	@common/scripts/uninstall-pattern-v2.sh $(DRY_RUN_FLAG) $(NAME)
+
 .PHONY: load-secrets
 load-secrets: ## loads the secrets into the backend determined by values-global setting
 	common/scripts/process-secrets.sh $(NAME)
