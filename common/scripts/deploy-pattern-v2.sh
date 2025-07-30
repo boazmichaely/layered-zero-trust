@@ -37,7 +37,6 @@ main() {
     if [ "$dry_run" = true ]; then
         echo "✓ DRY RUN: Skipping confirmation and actual deployment"
         echo "✓ Configuration loaded successfully - all systems ready!"
-        echo "✓ New 5-stage deployment architecture validated!"
         exit 0
     fi
     

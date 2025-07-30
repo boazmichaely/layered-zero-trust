@@ -392,6 +392,7 @@ print_component_tables() {
         echo
         
         # Stage 1-2: Infrastructure (display first - Vault only)
+        print_info "INFRASTRUCTURE:"
         print_category_table "infrastructure"
         echo
         
@@ -423,35 +424,12 @@ print_component_tables() {
         print_info "Install ArgoCD applications:"
         print_category_table "applications"
         echo
-        
-        print_info "DEPLOYMENT FLOW:"
-        echo "  Vault → Secrets Loading → Operators (parallel) → Pattern CR (ArgoCD App Factory) → ArgoCD Applications (parallel) → Component Deployment"
-        echo
     fi
 }
 
 # Print a single category table
 print_category_table() {
     local category="$1"
-    
-    # Get category title from config
-    local title=""
-    case "$category" in
-        "infrastructure")
-            title="INFRASTRUCTURE"
-            ;;
-        "operators") 
-            title="OPERATORS INSTALLED BY THE PATTERN"
-            ;;
-        "applications")
-            title="ZERO TRUST COMPONENTS (INSTALLED WITH ARGOCD)"
-            ;;
-        *)
-            title=$(echo "$category" | tr '[:lower:]' '[:upper:]')
-            ;;
-    esac
-    
-    print_info "$title:"
     
     # Check if this is applications category to get version column title
     local version_header="VERSION"

@@ -115,7 +115,7 @@ categories:
         argocd_app_name: "rh-keycloak"
         
       - id: "spire-app"
-        name: "ZT WIM (Spire) instance"
+        name: "ZT WIM (SPIRE) instance"
         namespace: "zero-trust-workload-identity-manager"
         version_source:
           type: "values-hub"
