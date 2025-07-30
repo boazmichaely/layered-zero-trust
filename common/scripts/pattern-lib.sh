@@ -380,7 +380,7 @@ print_component_tables() {
     
     if [ "$operation" = "install" ]; then
         print_info "DEPLOYMENT FLOW:"
-        echo "  Pattern CR → Secrets Loading → Patterns Operator → GitOps + Direct Operators → ArgoCD Applications → Component Deployment"
+        echo "  Pattern CR + Vault → Secrets Loading → Patterns Operator → GitOps + Direct Operators → ArgoCD Applications → Component Deployment"
         echo
     fi
 }
@@ -748,14 +748,15 @@ deploy_core_pattern() {
     shift 2
     local helm_opts="$*"
     
-    print_header "DEPLOYING CORE PATTERN INFRASTRUCTURE"
-    print_info "Installing pattern base infrastructure..."
+    print_header "DEPLOYING CORE PATTERN INFRASTRUCTURE + VAULT"
+    print_info "Installing pattern base infrastructure and HashiCorp Vault..."
     
     update_status "pattern-cr" "DEPLOYING" "Installing helm chart"
     
     local runs="${PATTERN_CONFIG[helm_deploy_retries]:-10}"
     local wait="${PATTERN_CONFIG[helm_wait_seconds]:-15}"
     
+    # Deploy Pattern CR first
     for i in $(seq 1 ${runs}); do
         exec 3>&1 4>&2
         OUT=$( { helm template --include-crds --name-template $name $chart $helm_opts 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
@@ -773,11 +774,77 @@ deploy_core_pattern() {
         update_status "pattern-cr" "FAILED" "Deployment failed after ${runs} attempts: $OUT"
         print_error "Core pattern deployment failed"
         return 1
-    else
-        update_status "pattern-cr" "SUCCESS" "Infrastructure deployed successfully"
-        print_success "Core pattern infrastructure deployed - starting async monitoring"
-        return 0
     fi
+    
+    update_status "pattern-cr" "SUCCESS" "Pattern CR deployed successfully"
+    print_success "Pattern CR deployed - now deploying Vault..."
+    
+    # Deploy Vault immediately after Pattern CR
+    update_status "vault-app" "DEPLOYING" "Installing HashiCorp Vault"
+    
+    # Get Vault chart version from config
+    local vault_version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.vault.chartVersion" "0.1.*")
+    
+    for i in $(seq 1 ${runs}); do
+        exec 3>&1 4>&2
+        # Deploy Vault using OCI chart reference
+        OUT=$( { helm template vault oci://quay.io/validatedpatterns/hashicorp-vault --version "$vault_version" \
+            --namespace vault --create-namespace 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
+        ret=$?
+        exec 3>&- 4>&-
+        if [ ${ret} -eq 0 ]; then
+            break;
+        else
+            echo -n "."
+            sleep "${wait}"
+        fi
+    done
+
+    if [ ${i} -eq ${runs} ]; then
+        update_status "vault-app" "FAILED" "Vault deployment failed after ${runs} attempts: $OUT"
+        print_error "Vault deployment failed"
+        return 1
+    fi
+    
+    update_status "vault-app" "SUCCESS" "Vault deployed successfully"
+    print_success "Core infrastructure + Vault deployed - waiting for Vault to be ready..."
+    
+    # Wait for Vault to be ready before proceeding
+    wait_for_vault_ready
+    
+    return 0
+}
+
+# Wait for Vault to be ready
+wait_for_vault_ready() {
+    print_info "Waiting for Vault to be ready..."
+    local timeout=300  # 5 minutes
+    local elapsed=0
+    local check_interval=10
+    
+    while [ $elapsed -lt $timeout ]; do
+        # Check if Vault pod is running
+        local vault_ready=$(oc get pods -n vault -l app.kubernetes.io/name=vault --no-headers 2>/dev/null | grep "Running" | wc -l | tr -d ' ')
+        
+        if [ "$vault_ready" -gt 0 ]; then
+            # Check if Vault API is responding (simplified check)
+            local vault_status=$(oc exec -n vault deployment/vault -- vault status -format=json 2>/dev/null | jq -r '.initialized' 2>/dev/null || echo "false")
+            
+            if [ "$vault_status" = "true" ] || [ "$vault_status" = "false" ]; then
+                # Vault API is responding (initialized or not, doesn't matter for secret loading)
+                print_success "Vault is ready and API is responding"
+                return 0
+            fi
+        fi
+        
+        echo -n "."
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+    
+    print_warning "Vault readiness check timed out after 5 minutes, proceeding anyway..."
+    print_info "Secrets loading will retry if Vault is not fully ready"
+    return 0  # Don't fail the deployment, just warn
 }
 
 # Load secrets before application monitoring

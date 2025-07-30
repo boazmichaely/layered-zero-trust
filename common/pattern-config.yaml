@@ -40,6 +40,16 @@ categories:
           fallback: "container failed"
         monitor_type: "subscription"
         subscription_name: "openshift-gitops-operator"
+        
+      - id: "vault-app"
+        name: "HashiCorp Vault"
+        namespace: "vault"
+        version_source:
+          type: "values-hub"
+          key: "clusterGroup.applications.vault.chartVersion"
+          chart_prefix: "hashicorp-vault"
+          fallback: "0.1.*"
+        monitor_type: "pattern-cr"
 
   operators:
     title: "OPERATORS INSTALLED BY THE PATTERN"
@@ -90,17 +100,6 @@ categories:
     description: "Applications deployed via ArgoCD"
     version_column_title: "HELM CHART VERSION"
     components:
-      - id: "vault-app"
-        name: "HashiCorp Vault"
-        namespace: "vault"
-        version_source:
-          type: "values-hub"
-          key: "vault.chartVersion"
-          chart_prefix: "hashicorp-vault"
-          fallback: "unknown"
-        monitor_type: "argocd"
-        argocd_app_name: "vault"
-        
       - id: "eso-app"
         name: "Golang External Secrets"
         namespace: "golang-external-secrets"
@@ -200,7 +199,7 @@ uninstall:
         - "cert-manager-app"
         - "keycloak-app"
         - "eso-app"
-        - "vault-app"
+        # Note: vault-app now deployed with Pattern CR, not ArgoCD
         # Then delete parent application last
         - pattern_name: "{pattern-name}-hub"
           namespace: "openshift-gitops"
