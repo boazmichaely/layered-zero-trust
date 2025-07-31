@@ -2095,24 +2095,20 @@ get_next_log_number() {
     
     # Find highest existing number across all log types
     if [ -d "$log_dir" ]; then
-        for pattern in "pattern-discovery-" "pattern-deployment-" "pattern-uninstall-"; do
-            for file in "$log_dir"/${pattern}*.log; do
-                if [ -f "$file" ]; then
-                    local num=$(basename "$file" | sed "s/${pattern}\([0-9]\{3\}\)\.log/\1/")
-                    # Validate it's a 3-digit number
-                    if echo "$num" | grep -q '^[0-9]\{3\}$'; then
-                        # Remove leading zeros for arithmetic comparison
-                        local num_int=$((10#$num))
-                        if [ "$num_int" -gt "$max_num" ]; then
-                            max_num=$num_int
-                        fi
-                    fi
+        # Look for any pattern-*-###.log files
+        for file in "$log_dir"/pattern-*-[0-9][0-9][0-9].log; do
+            if [ -f "$file" ]; then
+                # Extract the 3-digit number before .log
+                local num=$(echo "$file" | sed 's/.*-\([0-9][0-9][0-9]\)\.log$/\1/')
+                local num_int=$((10#$num))
+                if [ "$num_int" -gt "$max_num" ]; then
+                    max_num=$num_int
                 fi
-            done
+            fi
         done
     fi
     
-    # Increment and wrap at 999
+    # Increment and wrap around at 999
     local next_num=$((max_num + 1))
     if [ $next_num -gt 999 ]; then
         next_num=1
