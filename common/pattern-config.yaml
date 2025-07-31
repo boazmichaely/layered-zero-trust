@@ -13,7 +13,7 @@ categories:
     description: "Core pattern foundation components"
     components:
       - id: "vault-app"
-        name: "HashiCorp Vault"
+        name: "Vault"
         namespace: "vault"
         version_source:
           type: "values-hub"

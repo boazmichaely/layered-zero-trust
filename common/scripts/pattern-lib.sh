@@ -196,58 +196,45 @@ load_components() {
     return 0
 }
 
-# Load individual component details
+# Updated load_component_details to use discovery system
 load_component_details() {
     local comp_id="$1"
     local category="$2"
     
-    # Extract component details - different approach for pattern_controller
+    echo "Discovering details for $comp_id ($category)..." >> "$DISCOVERY_LOG"
+    
+    # Discover namespace (no more hardcoding!)
+    COMPONENTS["${comp_id}_namespace"]=$(discover_namespace "$comp_id" "$category")
+    
+    # Discover version (no more hardcoding!)
+    COMPONENTS["${comp_id}_version"]=$(discover_version "$comp_id" "$category")
+    
+    # For operators, discover subscription name
+    if [ "$category" = "operators" ]; then
+        COMPONENTS["${comp_id}_subscription_name"]=$(discover_subscription_name "$comp_id")
+    fi
+    
+    # For applications, discover ArgoCD app name
+    if [ "$category" = "applications" ]; then
+        local app_key=$(discover_application_key_for_component "$comp_id")
+        if [ -n "$app_key" ]; then
+            COMPONENTS["${comp_id}_argocd_app_name"]="$app_key"
+            log_discovery "$comp_id" "argocd_app_name" "component mapping" "$app_key" "mapped successfully"
+        else
+            COMPONENTS["${comp_id}_argocd_app_name"]="UNKNOWN (no mapping found)"
+            log_discovery "$comp_id" "argocd_app_name" "component mapping" "UNKNOWN" "no mapping for component $comp_id"
+        fi
+    fi
+    
+    # Still get display name and monitor type from config (these are not duplicated)
     if [ "$category" = "pattern_controller" ]; then
-        # Direct extraction for pattern_controller - fix the parsing paths
         local pattern_section=$(sed -n '/^pattern_controller:/,/^[a-z]/p' "$PATTERN_CONFIG_FILE" | sed '/^[a-z]/d')
-        
         COMPONENTS["${comp_id}_name"]=$(echo "$pattern_section" | grep "name:" | sed 's/.*name: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_namespace"]=$(echo "$pattern_section" | grep "namespace:" | sed 's/.*namespace: *"//' | sed 's/"$//' | head -1)
         COMPONENTS["${comp_id}_monitor_type"]=$(echo "$pattern_section" | grep "monitor_type:" | sed 's/.*monitor_type: *"//' | sed 's/"$//' | head -1)
-        
-        # Version source details
-        COMPONENTS["${comp_id}_version_type"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "type:" | sed 's/.*type: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_version_key"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "key:" | sed 's/.*key: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_version_fallback"]=$(echo "$pattern_section" | grep -A 5 "version_source:" | grep "fallback:" | sed 's/.*fallback: *"//' | sed 's/"$//' | head -1)
-        
     else
-        # For regular categories, find the component in the category's components array
         local component_section=$(sed -n "/^  $category:/,/^  [a-z]/p" "$PATTERN_CONFIG_FILE" | sed -n "/id: \"$comp_id\"/,/- id:/p" | sed '$d')
-        
-        # Extract name (handle multi-word names properly, clean up extra text)
-        local name=$(echo "$component_section" | grep "name:" | sed 's/.*name: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_name"]="$name"
-        
-        # Extract namespace
-        local namespace=$(echo "$component_section" | grep "namespace:" | sed 's/.*namespace: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_namespace"]="$namespace"
-        
-        # Extract monitor type
-        local monitor_type=$(echo "$component_section" | grep "monitor_type:" | sed 's/.*monitor_type: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_monitor_type"]="$monitor_type"
-        
-        # Version source details
-        local version_type=$(echo "$component_section" | grep -A 5 "version_source:" | grep "type:" | sed 's/.*type: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_version_type"]="$version_type"
-        COMPONENTS["${comp_id}_version_key"]=$(echo "$component_section" | grep -A 5 "version_source:" | grep "key:" | sed 's/.*key: *"//' | sed 's/"$//' | head -1)
-        COMPONENTS["${comp_id}_version_fallback"]=$(echo "$component_section" | grep -A 5 "version_source:" | grep "fallback:" | sed 's/.*fallback: *"//' | sed 's/"$//' | head -1)
-        
-        # Subscription details (if applicable)
-        local subscription_name=$(echo "$component_section" | grep "subscription_name:" | sed 's/.*subscription_name: *"//' | sed 's/"$//' | head -1)
-        if [ -n "$subscription_name" ]; then
-            COMPONENTS["${comp_id}_subscription_name"]="$subscription_name"
-        fi
-        
-        # ArgoCD details (if applicable)
-        local argocd_app_name=$(echo "$component_section" | grep "argocd_app_name:" | sed 's/.*argocd_app_name: *"//' | sed 's/"$//' | head -1)
-        if [ -n "$argocd_app_name" ]; then
-            COMPONENTS["${comp_id}_argocd_app_name"]="$argocd_app_name"
-        fi
+        COMPONENTS["${comp_id}_name"]=$(echo "$component_section" | grep "name:" | sed 's/.*name: *"//' | sed 's/"$//' | head -1)
+        COMPONENTS["${comp_id}_monitor_type"]=$(echo "$component_section" | grep "monitor_type:" | sed 's/.*monitor_type: *"//' | sed 's/"$//' | head -1)
     fi
 }
 
@@ -387,31 +374,36 @@ print_component_tables() {
     print_header "$pattern_display_name - INSTALLATION PLAN"
     
     if [ "$operation" = "install" ]; then
-        # Print the staged introduction text
-        print_info "The following tasks will be executed first:"
-        echo
+        local task_number=1
         
-        # Stage 1-2: Infrastructure (display first - Vault only)
-        print_info "INFRASTRUCTURE:"
+        # Sequential tasks section
+        print_info "The following tasks will be executed first:"
+        
+        # Task 1: Deploy Vault
+        echo "${task_number}. -- ℹ INFO: Deploy Vault"
         print_category_table "infrastructure"
         echo
+        task_number=$((task_number + 1))
         
-        print_info "Load secrets into Vault"
+        # Task 2: Load secrets  
+        echo "${task_number}. -- ℹ INFO: Load secrets into Vault"
         printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "VERSION"
         printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
         printf "%-50s | %-40s | %s\n" "Load secrets into Vault" "N/A" "N/A"
         echo
+        task_number=$((task_number + 1))
         
-        print_info "The following tasks will be executed in parallel and monitored:"
-        echo
+        # Parallel tasks section
+        print_info "The following blocks will be executed sequentially. Tasks in each block will run in parallel and be monitored:"
         
-        # Stage 3: Operators
-        print_info "Install Operators:"
+        # Task 3: Install Operators
+        echo "${task_number}. -- ℹ INFO: Install Operators:"
         print_category_table "operators"
         echo
+        task_number=$((task_number + 1))
         
-        # Stage 4: Pattern CR (ArgoCD App Factory)
-        print_info "Deploy Pattern CR (ArgoCD App Factory):"
+        # Task 4: Deploy Pattern CR
+        echo "${task_number}. -- ℹ INFO: Deploy Pattern CR (ArgoCD App Factory):"
         local pattern_cr_name="${COMPONENTS[pattern-cr_name]:-Pattern CR (ArgoCD App Factory)}"
         local pattern_cr_namespace="${COMPONENTS[pattern-cr_namespace]:-openshift-operators}"
         local pattern_cr_version=$(get_component_version "pattern-cr")
@@ -419,9 +411,10 @@ print_component_tables() {
         printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
         printf "%-50s | %-40s | %s\n" "$pattern_cr_name" "$pattern_cr_namespace" "$pattern_cr_version"
         echo
+        task_number=$((task_number + 1))
         
-        # Stage 5: Applications
-        print_info "Install ArgoCD applications:"
+        # Task 5: Install ArgoCD applications
+        echo "${task_number}. -- ℹ INFO: Install ArgoCD applications:"
         print_category_table "applications"
         echo
     fi
@@ -775,13 +768,430 @@ count_total_components() {
 }
 
 # =============================================================================
+# COMPONENT DISCOVERY WITH LOGGING SYSTEM
+# =============================================================================
+
+# Global discovery variables
+DISCOVERY_LOG=""
+DISCOVERY_SUCCESS_COUNT=0
+DISCOVERY_FAILURE_COUNT=0
+declare -A DISCOVERY_FAILURES
+
+# Initialize discovery logging
+init_discovery_logging() {
+    DISCOVERY_LOG="/tmp/pattern-discovery-$$.log"
+    DISCOVERY_SUCCESS_COUNT=0
+    DISCOVERY_FAILURE_COUNT=0
+    
+    echo "📋 COMPONENT DISCOVERY REPORT" > "$DISCOVERY_LOG"
+    echo "Generated: $(date)" >> "$DISCOVERY_LOG"
+    echo "Pattern: [Loading...]" >> "$DISCOVERY_LOG"
+    echo "=================================" >> "$DISCOVERY_LOG"
+    echo "" >> "$DISCOVERY_LOG"
+    
+    print_info "Discovery logging to: $DISCOVERY_LOG"
+}
+
+# Update discovery logging with pattern name
+update_discovery_pattern_name() {
+    if [ -n "$DISCOVERY_LOG" ] && [ -f "$DISCOVERY_LOG" ]; then
+        # Replace the placeholder with actual pattern name
+        sed -i.bak "s/Pattern: \[Loading...\]/Pattern: ${PATTERN_CONFIG[display_name]}/" "$DISCOVERY_LOG" 2>/dev/null || true
+        rm -f "${DISCOVERY_LOG}.bak" 2>/dev/null
+    fi
+}
+
+# Log a discovery attempt
+log_discovery() {
+    local component="$1"
+    local field="$2"
+    local source="$3"
+    local result="$4"
+    local reason="$5"
+    
+    echo "Component: $component" >> "$DISCOVERY_LOG"
+    
+    if [ -n "$result" ] && [ "$result" != "UNKNOWN"* ]; then
+        echo "  ✅ $field: Found '$result' in $source" >> "$DISCOVERY_LOG"
+        DISCOVERY_SUCCESS_COUNT=$((DISCOVERY_SUCCESS_COUNT + 1))
+    else
+        echo "  ❌ $field: FAILED - $reason" >> "$DISCOVERY_LOG"
+        DISCOVERY_FAILURE_COUNT=$((DISCOVERY_FAILURE_COUNT + 1))
+        DISCOVERY_FAILURES["${component}_${field}"]="$reason"
+    fi
+    echo "" >> "$DISCOVERY_LOG"
+}
+
+# Discover namespace with audit
+discover_namespace() {
+    local comp_id="$1"
+    local component_type="$2"
+    local result=""
+    local source=""
+    local reason=""
+    
+    case "$component_type" in
+        "operators")
+            # Try values-hub.yaml subscriptions section
+            local sub_key=$(discover_subscription_key_for_component "$comp_id")
+            if [ -n "$sub_key" ]; then
+                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.namespace")
+                source="values-hub.yaml subscriptions.${sub_key}.namespace"
+                reason="subscription found"
+            else
+                reason="no matching subscription found in values-hub.yaml"
+            fi
+            ;;
+        "applications")
+            # Try values-hub.yaml applications section
+            local app_key=$(discover_application_key_for_component "$comp_id")
+            if [ -n "$app_key" ]; then
+                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.${app_key}.namespace")
+                source="values-hub.yaml applications.${app_key}.namespace"
+                reason="application found"
+            else
+                reason="no matching application found in values-hub.yaml"
+            fi
+            ;;
+        "infrastructure"|"pattern_controller")
+            # Infrastructure components use known namespaces
+            case "$comp_id" in
+                "vault-app") result="vault"; source="infrastructure default"; reason="vault standard namespace" ;;
+                "pattern-cr") result="openshift-operators"; source="infrastructure default"; reason="pattern CR standard namespace" ;;
+                *) reason="unknown infrastructure component" ;;
+            esac
+            ;;
+        *)
+            reason="unknown component type: $component_type"
+            ;;
+    esac
+    
+    if [ -z "$result" ]; then
+        result="UNKNOWN ($reason)"
+    fi
+    
+    log_discovery "$comp_id" "namespace" "$source" "$result" "$reason"
+    echo "$result"
+}
+
+# Discover subscription name with audit  
+discover_subscription_name() {
+    local comp_id="$1"
+    local result=""
+    local source=""
+    local reason=""
+    
+    # Map component ID to values-hub.yaml subscription key
+    local sub_key=$(discover_subscription_key_for_component "$comp_id")
+    
+    if [ -n "$sub_key" ]; then
+        result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.name")
+        source="values-hub.yaml subscriptions.${sub_key}.name"
+        if [ -n "$result" ]; then
+            reason="subscription found"
+        else
+            reason="subscription key exists but name field empty"
+            result="UNKNOWN ($reason)"
+        fi
+    else
+        reason="no subscription mapping for component $comp_id"
+        result="UNKNOWN ($reason)"
+    fi
+    
+    log_discovery "$comp_id" "subscription_name" "$source" "$result" "$reason"
+    echo "$result"
+}
+
+# Discover version with audit
+discover_version() {
+    local comp_id="$1"
+    local component_type="$2"
+    local result=""
+    local source=""
+    local reason=""
+    
+    case "$component_type" in
+        "operators")
+            # Try to get channel from values-hub.yaml
+            local sub_key=$(discover_subscription_key_for_component "$comp_id")
+            if [ -n "$sub_key" ]; then
+                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.channel")
+                source="values-hub.yaml subscriptions.${sub_key}.channel"
+                if [ -n "$result" ]; then
+                    reason="subscription channel found"
+                else
+                    reason="subscription exists but no channel specified"
+                    result="UNKNOWN ($reason)"
+                fi
+            else
+                reason="no subscription found for operator"
+                result="UNKNOWN ($reason)"
+            fi
+            ;;
+        "applications")
+            # Try chartVersion first, then Chart.yaml
+            local app_key=$(discover_application_key_for_component "$comp_id")
+            if [ -n "$app_key" ]; then
+                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.${app_key}.chartVersion")
+                if [ -n "$result" ]; then
+                    source="values-hub.yaml applications.${app_key}.chartVersion"
+                    reason="chart version found"
+                else
+                    # Try Chart.yaml in local charts
+                    local chart_path=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.${app_key}.path")
+                    if [ -n "$chart_path" ]; then
+                        local chart_file="${chart_path}/Chart.yaml"
+                        if [ -f "$chart_file" ]; then
+                            result=$(parse_yaml_value "$chart_file" "version")
+                            source="$chart_file"
+                            if [ -n "$result" ]; then
+                                reason="version found in Chart.yaml"
+                            else
+                                reason="Chart.yaml exists but no version field"
+                                result="UNKNOWN ($reason)"
+                            fi
+                        else
+                            reason="application uses path but Chart.yaml not found at $chart_file"
+                            result="UNKNOWN ($reason)"
+                        fi
+                    else
+                        reason="application has no chartVersion or path"
+                        result="UNKNOWN ($reason)"
+                    fi
+                fi
+            else
+                reason="no application found"
+                result="UNKNOWN ($reason)"
+            fi
+            ;;
+        "infrastructure")
+            # Special handling for infrastructure
+            case "$comp_id" in
+                "vault-app")
+                    result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.vault.chartVersion")
+                    source="values-hub.yaml applications.vault.chartVersion"
+                    reason="vault chart version"
+                    ;;
+                "pattern-cr")
+                    result=$(parse_yaml_value "values-global.yaml" "clusterGroupChartVersion")
+                    source="values-global.yaml clusterGroupChartVersion"  
+                    reason="pattern chart version"
+                    ;;
+                *)
+                    reason="unknown infrastructure component"
+                    result="UNKNOWN ($reason)"
+                    ;;
+            esac
+            ;;
+        *)
+            reason="unknown component type for version discovery"
+            result="UNKNOWN ($reason)"
+            ;;
+    esac
+    
+    if [ -z "$result" ]; then
+        result="UNKNOWN ($reason)"
+    fi
+    
+    log_discovery "$comp_id" "version" "$source" "$result" "$reason"
+    echo "$result"
+}
+
+# Helper: Map component ID to subscription key in values-hub.yaml
+discover_subscription_key_for_component() {
+    local comp_id="$1"
+    case "$comp_id" in
+        "cert-manager-op") echo "cert-manager" ;;
+        "keycloak-op") echo "rhbk" ;;
+        "spire-op") echo "zero-trust-workload-identity-manager" ;;
+        "compliance-op") echo "compliance-operator" ;;
+        "gitops-operator") echo "gitops" ;; # if it exists
+        *) echo "" ;;
+    esac
+}
+
+# Helper: Map component ID to application key in values-hub.yaml  
+discover_application_key_for_component() {
+    local comp_id="$1"
+    case "$comp_id" in
+        "vault-app") echo "vault" ;;
+        "eso-app") echo "golang-external-secrets" ;;
+        "keycloak-app") echo "rh-keycloak" ;;
+        "cert-manager-app") echo "rh-cert-manager" ;;
+        "spire-app") echo "zero-trust-workload-identity-manager" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Generate final discovery summary
+generate_discovery_summary() {
+    echo "" >> "$DISCOVERY_LOG"
+    echo "📊 DISCOVERY SUMMARY" >> "$DISCOVERY_LOG"
+    echo "===================" >> "$DISCOVERY_LOG"
+    echo "✅ Successful discoveries: $DISCOVERY_SUCCESS_COUNT" >> "$DISCOVERY_LOG"
+    echo "❌ Failed discoveries: $DISCOVERY_FAILURE_COUNT" >> "$DISCOVERY_LOG"
+    echo "" >> "$DISCOVERY_LOG"
+    
+    if [ $DISCOVERY_FAILURE_COUNT -gt 0 ]; then
+        echo "❌ FAILED DISCOVERIES REQUIRING ATTENTION:" >> "$DISCOVERY_LOG"
+        for failure_key in "${!DISCOVERY_FAILURES[@]}"; do
+            echo "  - $failure_key: ${DISCOVERY_FAILURES[$failure_key]}" >> "$DISCOVERY_LOG"
+        done
+        echo "" >> "$DISCOVERY_LOG"
+        
+        echo "🔧 RECOMMENDED ACTIONS:" >> "$DISCOVERY_LOG"
+        echo "  1. Check values-hub.yaml for missing/incorrect entries" >> "$DISCOVERY_LOG"
+        echo "  2. Verify Chart.yaml files exist and have version fields" >> "$DISCOVERY_LOG"
+        echo "  3. Update component mappings in discover_*_key_for_component functions" >> "$DISCOVERY_LOG"
+    fi
+    
+    # Print summary to console
+    echo ""
+    print_info "📊 DISCOVERY SUMMARY:"
+    echo "  ✅ Successful: $DISCOVERY_SUCCESS_COUNT"
+    echo "  ❌ Failed: $DISCOVERY_FAILURE_COUNT"
+    if [ $DISCOVERY_FAILURE_COUNT -gt 0 ]; then
+        echo "  📋 Full discovery log: $DISCOVERY_LOG"
+        echo "  🔧 Review failures and update configuration sources"
+    fi
+}
+
+# =============================================================================
+# DEPLOYMENT EXECUTION LOGGING SYSTEM
+# =============================================================================
+
+# Global deployment logging variables
+DEPLOYMENT_LOG=""
+DEPLOYMENT_START_TIME=""
+STAGE_START_TIME=""
+
+# Initialize deployment logging
+init_deployment_logging() {
+    DEPLOYMENT_LOG="/tmp/pattern-deployment-$$.log"
+    DEPLOYMENT_START_TIME=$(date +%s)
+    
+    echo "🚀 DEPLOYMENT EXECUTION LOG" > "$DEPLOYMENT_LOG"
+    echo "Generated: $(date)" >> "$DEPLOYMENT_LOG"
+    echo "Pattern: ${PATTERN_CONFIG[display_name]}" >> "$DEPLOYMENT_LOG"
+    echo "=================================" >> "$DEPLOYMENT_LOG"
+    echo "" >> "$DEPLOYMENT_LOG"
+    
+    print_info "Deployment logging to: $DEPLOYMENT_LOG"
+}
+
+# Log deployment stage start
+log_stage_start() {
+    local stage_number="$1"
+    local stage_name="$2"
+    local stage_description="$3"
+    
+    STAGE_START_TIME=$(date +%s)
+    local timestamp=$(date +%H:%M:%S)
+    
+    echo "STAGE $stage_number: $stage_name" >> "$DEPLOYMENT_LOG"
+    echo "$(printf '=%.0s' {1..50})" >> "$DEPLOYMENT_LOG"
+    echo "$timestamp - $stage_description" >> "$DEPLOYMENT_LOG"
+}
+
+# Log deployment step
+log_deployment_step() {
+    local step_description="$1"
+    local result="$2"
+    local details="$3"
+    
+    local timestamp=$(date +%H:%M:%S)
+    
+    case "$result" in
+        "SUCCESS"|"COMPLETED")
+            echo "$timestamp - $step_description: SUCCESS${details:+ - $details}" >> "$DEPLOYMENT_LOG"
+            ;;
+        "FAILED"|"ERROR")
+            echo "$timestamp - $step_description: FAILED${details:+ - $details}" >> "$DEPLOYMENT_LOG"
+            ;;
+        "RETRY")
+            echo "$timestamp - $step_description: RETRY${details:+ - $details}" >> "$DEPLOYMENT_LOG"
+            ;;
+        "INFO")
+            echo "$timestamp - $step_description${details:+ - $details}" >> "$DEPLOYMENT_LOG"
+            ;;
+        *)
+            echo "$timestamp - $step_description: $result${details:+ - $details}" >> "$DEPLOYMENT_LOG"
+            ;;
+    esac
+}
+
+# Log stage completion
+log_stage_end() {
+    local stage_number="$1"
+    local result="$2"
+    local additional_info="$3"
+    
+    local stage_end_time=$(date +%s)
+    local stage_duration=$((stage_end_time - STAGE_START_TIME))
+    local timestamp=$(date +%H:%M:%S)
+    
+    if [ "$result" = "SUCCESS" ]; then
+        echo "$timestamp - Stage $stage_number completed in ${stage_duration} seconds${additional_info:+ - $additional_info}" >> "$DEPLOYMENT_LOG"
+    else
+        echo "$timestamp - Stage $stage_number FAILED after ${stage_duration} seconds${additional_info:+ - $additional_info}" >> "$DEPLOYMENT_LOG"
+    fi
+    echo "" >> "$DEPLOYMENT_LOG"
+}
+
+# Generate deployment summary
+generate_deployment_summary() {
+    local overall_result="$1"
+    local summary_details="$2"
+    
+    local deployment_end_time=$(date +%s)
+    local total_duration=$((deployment_end_time - DEPLOYMENT_START_TIME))
+    local minutes=$((total_duration / 60))
+    local seconds=$((total_duration % 60))
+    
+    echo "🎉 DEPLOYMENT SUMMARY" >> "$DEPLOYMENT_LOG"
+    echo "===================" >> "$DEPLOYMENT_LOG"
+    
+    if [ "$overall_result" = "SUCCESS" ]; then
+        echo "✅ Total deployment time: ${minutes}m ${seconds}s" >> "$DEPLOYMENT_LOG"
+        echo "✅ All 5 stages successful" >> "$DEPLOYMENT_LOG"
+    else
+        echo "❌ Deployment FAILED after ${minutes}m ${seconds}s" >> "$DEPLOYMENT_LOG"
+        echo "❌ Failure occurred in: $overall_result" >> "$DEPLOYMENT_LOG"
+    fi
+    
+    if [ -n "$summary_details" ]; then
+        echo "$summary_details" >> "$DEPLOYMENT_LOG"
+    fi
+    
+    # Check for discovery issues
+    if [ $DISCOVERY_FAILURE_COUNT -gt 0 ]; then
+        echo "⚠️  $DISCOVERY_FAILURE_COUNT components had discovery issues (see discovery log)" >> "$DEPLOYMENT_LOG"
+    fi
+    
+    # Console summary
+    echo ""
+    print_info "📋 DEPLOYMENT SUMMARY:"
+    if [ "$overall_result" = "SUCCESS" ]; then
+        echo "  ✅ Deployment: SUCCESS (${minutes}m ${seconds}s)"
+    else
+        echo "  ❌ Deployment: FAILED (${minutes}m ${seconds}s)"
+    fi
+    if [ $DISCOVERY_FAILURE_COUNT -gt 0 ]; then
+        echo "  ⚠️  Discovery issues: $DISCOVERY_FAILURE_COUNT components"
+    fi
+    echo "  📋 Full logs: $DEPLOYMENT_LOG"
+    echo "  📋 Discovery details: $DISCOVERY_LOG"
+}
+
+# =============================================================================
 # INSTALLATION FUNCTIONS
 # =============================================================================
 
 # Deploy Vault (Stage 1)
 deploy_vault() {
-    print_header "STAGE 1: DEPLOYING HASHICORP VAULT"
-    print_info "Installing HashiCorp Vault for secrets storage..."
+    log_stage_start "1" "VAULT DEPLOYMENT" "Starting Vault deployment"
+    
+    log_deployment_step "Starting Vault deployment" "INFO"
     
     update_status "vault-app" "DEPLOYING" "Installing HashiCorp Vault"
     
@@ -790,35 +1200,53 @@ deploy_vault() {
     
     # Get Vault chart version from config
     local vault_version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.vault.chartVersion" "0.1.*")
+    log_deployment_step "Vault chart version discovered" "INFO" "$vault_version"
     
+    local attempt=1
     for i in $(seq 1 ${runs}); do
         exec 3>&1 4>&2
+        log_deployment_step "Helm deployment attempt $attempt" "INFO"
         # Deploy Vault using OCI chart reference
         OUT=$( { helm template vault oci://quay.io/validatedpatterns/hashicorp-vault --version "$vault_version" \
             --namespace vault --create-namespace 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
         ret=$?
         exec 3>&- 4>&-
         if [ ${ret} -eq 0 ]; then
+            log_deployment_step "Helm deployment attempt $attempt" "SUCCESS"
             break;
         else
+            log_deployment_step "Helm deployment attempt $attempt" "RETRY" "$OUT"
             echo -n "."
             sleep "${wait}"
+            attempt=$((attempt + 1))
         fi
     done
 
     if [ ${i} -eq ${runs} ]; then
         update_status "vault-app" "FAILED" "Vault deployment failed after ${runs} attempts: $OUT"
+        log_deployment_step "Vault deployment" "FAILED" "Failed after ${runs} attempts: $OUT"
+        log_stage_end "1" "FAILED" "Vault deployment failed"
         print_error "Vault deployment failed"
         return 1
     fi
     
     update_status "vault-app" "SUCCESS" "Vault deployed successfully"
-    print_success "Vault deployed successfully - waiting for readiness..."
+    log_deployment_step "Vault deployment" "SUCCESS" "Deployed successfully"
+    log_deployment_step "Waiting for Vault to be ready" "INFO"
     
     # Wait for Vault to be ready before proceeding
     wait_for_vault_ready
+    local vault_ready_result=$?
     
-    return 0
+    if [ $vault_ready_result -eq 0 ]; then
+        log_deployment_step "Vault readiness check" "SUCCESS" "Vault is ready and API responding"
+        log_stage_end "1" "SUCCESS"
+    else
+        log_deployment_step "Vault readiness check" "FAILED" "Timeout after 5 minutes"
+        log_stage_end "1" "FAILED" "Vault readiness timeout"
+    fi
+    
+    return $vault_ready_result
 }
 
 # Wait for Vault to be ready
@@ -857,30 +1285,37 @@ wait_for_vault_ready() {
 load_secrets() {
     local pattern_name="$1"
     
-    print_header "STAGE 2: LOADING SECRETS INTO VAULT"
-    print_info "Processing and loading secrets for pattern: $pattern_name"
+    log_stage_start "2" "SECRETS LOADING" "Processing and loading secrets for pattern: $pattern_name"
     
     # Check if secrets script exists
     local secrets_script="$SCRIPT_DIR/process-secrets.sh"
     if [ ! -f "$secrets_script" ]; then
+        log_deployment_step "Secrets script check" "FAILED" "Script not found at $secrets_script"
+        log_stage_end "2" "FAILED" "Secrets script missing"
         print_warning "Secrets script not found at $secrets_script, skipping secrets loading"
         return 0
     fi
     
-    print_info "Running secrets processing script..."
-    if ! bash "$secrets_script"; then
+    log_deployment_step "Secrets script found" "SUCCESS" "$secrets_script"
+    log_deployment_step "Starting secrets processing" "INFO"
+    
+    if bash "$secrets_script"; then
+        log_deployment_step "Ansible playbook execution" "SUCCESS"
+        log_deployment_step "Secrets loaded into Vault" "SUCCESS"
+        log_stage_end "2" "SUCCESS"
+        print_success "Secrets loaded successfully into Vault"
+        return 0
+    else
+        log_deployment_step "Ansible playbook execution" "FAILED"
+        log_stage_end "2" "FAILED" "Secrets loading failed"
         print_error "Secrets loading failed"
         return 1
     fi
-    
-    print_success "Secrets loaded successfully into Vault"
-    return 0
 }
 
 # Deploy operators in parallel and wait for readiness (Stage 3)
 deploy_operators_parallel() {
-    print_header "STAGE 3: DEPLOYING OPERATORS (PARALLEL)"
-    print_info "Installing all operators in parallel, then waiting for readiness..."
+    log_stage_start "3" "OPERATORS DEPLOYMENT" "Installing all operators in parallel, then waiting for readiness"
     
     local operator_components=()
     
@@ -892,18 +1327,24 @@ deploy_operators_parallel() {
     done
     
     if [ ${#operator_components[@]} -eq 0 ]; then
+        log_deployment_step "Operator components discovery" "FAILED" "No operator components found"
+        log_stage_end "3" "FAILED" "No operators to deploy"
         print_warning "No operator components found"
         return 0
     fi
     
+    log_deployment_step "Starting parallel operator deployment" "INFO" "${#operator_components[@]} operators"
+    
     # Start monitoring all operators in parallel
     for comp_id in "${operator_components[@]}"; do
+        local operator_name="${COMPONENTS[${comp_id}_name]}"
+        log_deployment_step "$operator_name: subscription created" "SUCCESS"
         start_subscription_monitor "$comp_id" &
     done
     
-    # Wait for all operators to be ready
-    print_info "Waiting for all ${#operator_components[@]} operators to be ready..."
+    log_deployment_step "Waiting for operator readiness" "INFO"
     
+    # Wait for all operators to be ready
     local all_ready=false
     local timeout=1800  # 30 minutes
     local elapsed=0
@@ -914,9 +1355,20 @@ deploy_operators_parallel() {
         
         for comp_id in "${operator_components[@]}"; do
             local status=$(get_status "$comp_id" "status")
-            if [ "$status" != "SUCCESS" ]; then
+            local operator_name="${COMPONENTS[${comp_id}_name]}"
+            
+            if [ "$status" = "SUCCESS" ]; then
+                # Only log success once per operator
+                if [ ! -f "/tmp/logged_${comp_id}_success" ]; then
+                    log_deployment_step "$operator_name: CSV Ready" "SUCCESS"
+                    touch "/tmp/logged_${comp_id}_success"
+                fi
+            elif [ "$status" = "FAILED" ]; then
+                log_deployment_step "$operator_name: deployment failed" "FAILED"
+                log_stage_end "3" "FAILED" "$operator_name deployment failed"
+                return 1
+            else
                 all_ready=false
-                break
             fi
         done
         
@@ -926,10 +1378,19 @@ deploy_operators_parallel() {
         fi
     done
     
+    # Cleanup temp files
+    for comp_id in "${operator_components[@]}"; do
+        rm -f "/tmp/logged_${comp_id}_success" 2>/dev/null
+    done
+    
     if [ "$all_ready" = true ]; then
+        log_deployment_step "All operators ready" "SUCCESS"
+        log_stage_end "3" "SUCCESS" "${#operator_components[@]} operators deployed"
         print_success "All operators deployed and ready!"
         return 0
     else
+        log_deployment_step "Operators readiness check" "FAILED" "Timeout after $((timeout/60)) minutes"
+        log_stage_end "3" "FAILED" "Operator readiness timeout"
         print_error "Operators readiness timeout after $((timeout/60)) minutes"
         return 1
     fi
@@ -942,35 +1403,49 @@ deploy_pattern_controller() {
     shift 2
     local helm_opts="$*"
     
-    print_header "STAGE 4: DEPLOYING PATTERN CR (ARGOCD APP FACTORY)"
-    print_info "Installing Pattern CR to create ArgoCD applications..."
+    log_stage_start "4" "PATTERN CR DEPLOYMENT" "Installing Pattern CR to create ArgoCD applications"
+    
+    log_deployment_step "Starting Pattern CR (ArgoCD App Factory)" "INFO"
     
     update_status "pattern-cr" "DEPLOYING" "Installing helm chart"
     
     local runs="${PATTERN_CONFIG[helm_deploy_retries]:-10}"
     local wait="${PATTERN_CONFIG[helm_wait_seconds]:-15}"
     
+    log_deployment_step "Helm template generation" "INFO"
+    
+    local attempt=1
     # Deploy Pattern CR
     for i in $(seq 1 ${runs}); do
         exec 3>&1 4>&2
+        log_deployment_step "Pattern CR deployment attempt $attempt" "INFO"
         OUT=$( { helm template --include-crds --name-template $name $chart $helm_opts 2>&4 | oc apply -f- 2>&4 1>&3; } 4>&1 3>&1)
         ret=$?
         exec 3>&- 4>&-
         if [ ${ret} -eq 0 ]; then
+            log_deployment_step "Pattern CR deployment attempt $attempt" "SUCCESS"
             break;
         else
+            log_deployment_step "Pattern CR deployment attempt $attempt" "RETRY" "$OUT"
             echo -n "."
             sleep "${wait}"
+            attempt=$((attempt + 1))
         fi
     done
 
     if [ ${i} -eq ${runs} ]; then
         update_status "pattern-cr" "FAILED" "Deployment failed after ${runs} attempts: $OUT"
+        log_deployment_step "Pattern CR deployment" "FAILED" "Failed after ${runs} attempts: $OUT"
+        log_stage_end "4" "FAILED" "Pattern CR deployment failed"
         print_error "Pattern CR deployment failed"
         return 1
     fi
     
     update_status "pattern-cr" "SUCCESS" "Pattern CR deployed successfully"
+    log_deployment_step "Pattern CR created" "SUCCESS" "$name"
+    log_deployment_step "ArgoCD applications being created" "INFO"
+    
+    log_stage_end "4" "SUCCESS" "ArgoCD App Factory deployed"
     print_success "Pattern CR (ArgoCD App Factory) deployed - ArgoCD applications are now being created!"
     
     return 0
@@ -978,8 +1453,7 @@ deploy_pattern_controller() {
 
 # Deploy applications in parallel (Stage 5)
 deploy_applications_parallel() {
-    print_header "STAGE 5: MONITORING ARGOCD APPLICATIONS (PARALLEL)"
-    print_info "Monitoring ArgoCD applications created by Pattern CR..."
+    log_stage_start "5" "ARGOCD APPLICATIONS" "Monitoring ArgoCD applications created by Pattern CR"
     
     local app_components=()
     
@@ -991,17 +1465,84 @@ deploy_applications_parallel() {
     done
     
     if [ ${#app_components[@]} -eq 0 ]; then
+        log_deployment_step "Application components discovery" "FAILED" "No application components found"
+        log_stage_end "5" "FAILED" "No applications to monitor"
         print_warning "No application components found"
         return 0
     fi
     
+    log_deployment_step "Starting application monitoring" "INFO" "${#app_components[@]} applications"
+    log_deployment_step "Waiting for applications to appear" "INFO"
+    
     # Start monitoring all applications in parallel
     for comp_id in "${app_components[@]}"; do
+        local app_name="${COMPONENTS[${comp_id}_argocd_app_name]}"
+        log_deployment_step "$app_name: Found, monitoring sync" "SUCCESS"
         start_argocd_monitor "$comp_id" &
     done
     
-    print_success "Started monitoring ${#app_components[@]} ArgoCD applications in parallel"
-    return 0
+    # Wait a bit for applications to sync
+    local sync_timeout=600  # 10 minutes for all apps to sync
+    local elapsed=0
+    local check_interval=15
+    
+    log_deployment_step "Monitoring application sync status" "INFO" "Timeout: ${sync_timeout}s"
+    
+    while [ $elapsed -lt $sync_timeout ]; do
+        local all_synced=true
+        local synced_count=0
+        
+        for comp_id in "${app_components[@]}"; do
+            local status=$(get_status "$comp_id" "status")
+            local app_name="${COMPONENTS[${comp_id}_argocd_app_name]}"
+            
+            if [ "$status" = "SUCCESS" ]; then
+                # Only log success once per application
+                if [ ! -f "/tmp/logged_${comp_id}_synced" ]; then
+                    log_deployment_step "$app_name: Synced and Healthy" "SUCCESS"
+                    touch "/tmp/logged_${comp_id}_synced"
+                fi
+                synced_count=$((synced_count + 1))
+            elif [ "$status" = "FAILED" ]; then
+                log_deployment_step "$app_name: sync failed" "FAILED"
+                all_synced=false
+            else
+                all_synced=false
+            fi
+        done
+        
+        if [ "$all_synced" = true ]; then
+            break
+        fi
+        
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+    
+    # Cleanup temp files
+    for comp_id in "${app_components[@]}"; do
+        rm -f "/tmp/logged_${comp_id}_synced" 2>/dev/null
+    done
+    
+    local final_synced_count=0
+    for comp_id in "${app_components[@]}"; do
+        local status=$(get_status "$comp_id" "status")
+        if [ "$status" = "SUCCESS" ]; then
+            final_synced_count=$((final_synced_count + 1))
+        fi
+    done
+    
+    if [ $final_synced_count -eq ${#app_components[@]} ]; then
+        log_deployment_step "All applications synced" "SUCCESS" "$final_synced_count/${#app_components[@]}"
+        log_stage_end "5" "SUCCESS" "$final_synced_count applications synced"
+        print_success "Started monitoring ${#app_components[@]} ArgoCD applications in parallel"
+        return 0
+    else
+        log_deployment_step "Application sync incomplete" "FAILED" "$final_synced_count/${#app_components[@]} synced"
+        log_stage_end "5" "FAILED" "Some applications failed to sync"
+        print_warning "Only $final_synced_count/${#app_components[@]} applications synced successfully"
+        return 1
+    fi
 }
 
 # Start all component monitors
@@ -1192,25 +1733,167 @@ ask_confirmation() {
 }
 
 # =============================================================================
+# UNINSTALL EXECUTION LOGGING SYSTEM
+# =============================================================================
+
+# Global uninstall logging variables
+UNINSTALL_LOG=""
+UNINSTALL_START_TIME=""
+
+# Initialize uninstall logging
+init_uninstall_logging() {
+    UNINSTALL_LOG="/tmp/pattern-uninstall-$$.log"
+    UNINSTALL_START_TIME=$(date +%s)
+    
+    echo "🗑️  UNINSTALL EXECUTION LOG" > "$UNINSTALL_LOG"
+    echo "Generated: $(date)" >> "$UNINSTALL_LOG"
+    echo "Pattern: ${PATTERN_CONFIG[display_name]}" >> "$UNINSTALL_LOG"
+    echo "=================================" >> "$UNINSTALL_LOG"
+    echo "" >> "$UNINSTALL_LOG"
+    
+    print_info "Uninstall logging to: $UNINSTALL_LOG"
+}
+
+# Log safety preflight check
+log_safety_preflight() {
+    local current_user="$1"
+    local cluster_version="$2"
+    local system_namespaces="$3"
+    local pattern_namespaces="$4"
+    local safety_result="$5"
+    
+    local timestamp=$(date +%H:%M:%S)
+    
+    echo "SAFETY PREFLIGHT CHECK" >> "$UNINSTALL_LOG"
+    echo "======================" >> "$UNINSTALL_LOG"
+    echo "$timestamp - Current user: $current_user" >> "$UNINSTALL_LOG"
+    echo "$timestamp - Cluster version: $cluster_version" >> "$UNINSTALL_LOG"
+    echo "$timestamp - System namespaces detected: $system_namespaces" >> "$UNINSTALL_LOG"
+    echo "$timestamp - Pattern namespaces to delete: $pattern_namespaces" >> "$UNINSTALL_LOG"
+    echo "$timestamp - Safety check: $safety_result" >> "$UNINSTALL_LOG"
+    echo "" >> "$UNINSTALL_LOG"
+}
+
+# Log namespace safety decision
+log_namespace_safety_decision() {
+    local namespace="$1"
+    local action="$2"
+    local reason="$3"
+    local resources_affected="$4"
+    
+    local timestamp=$(date +%H:%M:%S)
+    
+    case "$action" in
+        "DELETE")
+            echo "$timestamp - $namespace: DELETING ($reason)" >> "$UNINSTALL_LOG"
+            ;;
+        "PRESERVE")
+            echo "$timestamp - $namespace: PRESERVING ($reason) - cleaned $resources_affected resources" >> "$UNINSTALL_LOG"
+            ;;
+        "SKIP")
+            echo "$timestamp - $namespace: SKIPPING ($reason)" >> "$UNINSTALL_LOG"
+            ;;
+    esac
+}
+
+# Log uninstall step
+log_uninstall_step() {
+    local step_description="$1"
+    local result="$2"
+    local details="$3"
+    
+    local timestamp=$(date +%H:%M:%S)
+    
+    case "$result" in
+        "DELETED"|"SUCCESS")
+            echo "$timestamp - $step_description: DELETED${details:+ - $details}" >> "$UNINSTALL_LOG"
+            ;;
+        "FAILED"|"ERROR")
+            echo "$timestamp - $step_description: FAILED${details:+ - $details}" >> "$UNINSTALL_LOG"
+            ;;
+        "SKIPPED")
+            echo "$timestamp - $step_description: SKIPPED${details:+ - $details}" >> "$UNINSTALL_LOG"
+            ;;
+        "INFO")
+            echo "$timestamp - $step_description${details:+ - $details}" >> "$UNINSTALL_LOG"
+            ;;
+        *)
+            echo "$timestamp - $step_description: $result${details:+ - $details}" >> "$UNINSTALL_LOG"
+            ;;
+    esac
+}
+
+# Generate uninstall summary
+generate_uninstall_summary() {
+    local overall_result="$1"
+    local apps_deleted="$2"
+    local operators_cleaned="$3"
+    local namespaces_deleted="$4"
+    local namespaces_preserved="$5"
+    
+    local uninstall_end_time=$(date +%s)
+    local total_duration=$((uninstall_end_time - UNINSTALL_START_TIME))
+    local minutes=$((total_duration / 60))
+    local seconds=$((total_duration % 60))
+    
+    echo "🗑️  UNINSTALL SUMMARY" >> "$UNINSTALL_LOG"
+    echo "====================" >> "$UNINSTALL_LOG"
+    
+    if [ "$overall_result" = "SUCCESS" ]; then
+        echo "✅ Total uninstall time: ${minutes}m ${seconds}s" >> "$UNINSTALL_LOG"
+        echo "✅ All stages successful" >> "$UNINSTALL_LOG"
+        echo "✅ $apps_deleted ArgoCD applications deleted" >> "$UNINSTALL_LOG"
+        echo "✅ $operators_cleaned operators cleaned up" >> "$UNINSTALL_LOG"
+        echo "✅ $namespaces_deleted pattern namespaces deleted" >> "$UNINSTALL_LOG"
+        echo "✅ $namespaces_preserved system namespaces preserved" >> "$UNINSTALL_LOG"
+    else
+        echo "❌ Uninstall FAILED after ${minutes}m ${seconds}s" >> "$UNINSTALL_LOG"
+        echo "❌ Failure occurred during: $overall_result" >> "$UNINSTALL_LOG"
+    fi
+    
+    # Check for discovery issues
+    if [ $DISCOVERY_FAILURE_COUNT -gt 0 ]; then
+        echo "⚠️  Check discovery log for any component issues" >> "$UNINSTALL_LOG"
+    fi
+    
+    # Console summary
+    echo ""
+    print_info "📋 UNINSTALL SUMMARY:"
+    if [ "$overall_result" = "SUCCESS" ]; then
+        echo "  ✅ Uninstall: SUCCESS (${minutes}m ${seconds}s)"
+        echo "  ✅ $apps_deleted applications, $operators_cleaned operators, $namespaces_deleted namespaces"
+    else
+        echo "  ❌ Uninstall: FAILED (${minutes}m ${seconds}s)"
+    fi
+    echo "  📋 Full logs: $UNINSTALL_LOG"
+    echo "  📋 Discovery details: $DISCOVERY_LOG"
+}
+
+# =============================================================================
 # LIBRARY INITIALIZATION
 # =============================================================================
 
 # Initialize the pattern library
 init_pattern_lib() {
-    # Load configuration first
+    # Initialize all logging systems (basic setup)
+    init_discovery_logging
+    init_deployment_logging
+    
+    # Load existing configuration  
     if ! load_pattern_config; then
-        print_error "Failed to load pattern configuration"
         return 1
     fi
     
-    # Load component definitions
+    # Update discovery log with actual pattern name
+    update_discovery_pattern_name
+    
+    # Load components with discovery logging
     if ! load_components; then
-        print_error "Failed to load component definitions"
         return 1
     fi
     
-    # Initialize monitoring
-    init_monitoring
+    # Generate final discovery summary
+    generate_discovery_summary
     
     return 0
 }
