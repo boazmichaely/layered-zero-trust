@@ -1,0 +1,115 @@
+📋 COMPONENT DISCOVERY REPORT
+Generated: Wed Jul 30 23:57:27 EDT 2025
+Pattern: Layered Zero Trust
+=================================
+
+[23:57:27] Discovering details for vault-app (infrastructure)...
+[23:57:27] Component: vault-app
+[23:57:27]   ✅ namespace: Found 'vault' in infrastructure default
+
+[23:57:27] Component: vault-app
+[23:57:27]   ✅ version: Found '0.1.*' in values-hub.yaml applications.vault.chartVersion
+
+[23:57:27] Discovering details for gitops-operator (operators)...
+[23:57:27] Component: gitops-operator
+[23:57:27]   ✅ namespace: Found 'openshift-gitops' in infrastructure default
+
+[23:57:27] Component: gitops-operator
+[23:57:27]   ✅ version: Found 'stable' in infrastructure default
+
+[23:57:27] Component: gitops-operator
+[23:57:27]   ✅ subscription_name: Found 'UNKNOWN (no subscription mapping for component gitops-operator)' in 
+
+[23:57:28] Discovering details for cert-manager-op (operators)...
+[23:57:28] Component: cert-manager-op
+[23:57:28]   ✅ namespace: Found 'cert-manager-operator' in values-hub.yaml subscriptions.cert-manager.namespace
+
+[23:57:28] Component: cert-manager-op
+[23:57:28]   ✅ version: Found 'stable-v1' in values-hub.yaml subscriptions.cert-manager.channel
+
+[23:57:28] Component: cert-manager-op
+[23:57:28]   ✅ subscription_name: Found 'openshift-cert-manager-operator' in values-hub.yaml subscriptions.cert-manager.name
+
+[23:57:28] Discovering details for keycloak-op (operators)...
+[23:57:28] Component: keycloak-op
+[23:57:28]   ✅ namespace: Found 'keycloak-system' in values-hub.yaml subscriptions.rhbk.namespace
+
+[23:57:28] Component: keycloak-op
+[23:57:28]   ✅ version: Found 'stable-v26.2' in values-hub.yaml subscriptions.rhbk.channel
+
+[23:57:28] Component: keycloak-op
+[23:57:28]   ✅ subscription_name: Found 'rhbk-operator' in values-hub.yaml subscriptions.rhbk.name
+
+[23:57:28] Discovering details for spire-op (operators)...
+[23:57:28] Component: spire-op
+[23:57:28]   ✅ namespace: Found 'zero-trust-workload-identity-manager' in values-hub.yaml subscriptions.zero-trust-workload-identity-manager.namespace
+
+[23:57:28] Component: spire-op
+[23:57:28]   ✅ version: Found 'tech-preview-v0.1' in values-hub.yaml subscriptions.zero-trust-workload-identity-manager.channel
+
+[23:57:28] Component: spire-op
+[23:57:28]   ✅ subscription_name: Found 'openshift-zero-trust-workload-identity-manager' in values-hub.yaml subscriptions.zero-trust-workload-identity-manager.name
+
+[23:57:29] Discovering details for compliance-op (operators)...
+[23:57:29] Component: compliance-op
+[23:57:29]   ✅ namespace: Found 'openshift-compliance' in values-hub.yaml subscriptions.compliance-operator.namespace
+
+[23:57:29] Component: compliance-op
+[23:57:29]   ✅ version: Found 'stable' in values-hub.yaml subscriptions.compliance-operator.channel
+
+[23:57:29] Component: compliance-op
+[23:57:29]   ✅ subscription_name: Found 'compliance-operator' in values-hub.yaml subscriptions.compliance-operator.name
+
+[23:57:29] Discovering details for eso-app (applications)...
+[23:57:29] Component: eso-app
+[23:57:29]   ✅ namespace: Found 'golang-external-secrets' in values-hub.yaml applications.golang-external-secrets.namespace
+
+[23:57:29] Component: eso-app
+[23:57:29]   ✅ version: Found '0.1.*' in values-hub.yaml applications.golang-external-secrets.chartVersion
+
+[23:57:29] Component: eso-app
+[23:57:29]   ✅ argocd_app_name: Found 'golang-external-secrets' in component mapping
+
+[23:57:29] Discovering details for cert-manager-app (applications)...
+[23:57:29] Component: cert-manager-app
+[23:57:29]   ✅ namespace: Found 'cert-manager-operator' in values-hub.yaml applications.rh-cert-manager.namespace
+
+[23:57:29] Component: cert-manager-app
+[23:57:29]   ✅ version: Found 'UNKNOWN (no chartVersion or path specified)' in 
+
+[23:57:29] Component: cert-manager-app
+[23:57:29]   ✅ argocd_app_name: Found 'rh-cert-manager' in component mapping
+
+[23:57:29] Discovering details for keycloak-app (applications)...
+[23:57:30] Component: keycloak-app
+[23:57:30]   ✅ namespace: Found 'keycloak-system' in values-hub.yaml applications.rh-keycloak.namespace
+
+[23:57:30] Component: keycloak-app
+[23:57:30]   ✅ version: Found 'UNKNOWN (no chartVersion or path specified)' in 
+
+[23:57:30] Component: keycloak-app
+[23:57:30]   ✅ argocd_app_name: Found 'rh-keycloak' in component mapping
+
+[23:57:30] Discovering details for spire-app (applications)...
+[23:57:30] Component: spire-app
+[23:57:30]   ✅ namespace: Found 'zero-trust-workload-identity-manager' in values-hub.yaml applications.zero-trust-workload-identity-manager.namespace
+
+[23:57:30] Component: spire-app
+[23:57:30]   ✅ version: Found 'UNKNOWN (no chartVersion or path specified)' in 
+
+[23:57:30] Component: spire-app
+[23:57:30]   ✅ argocd_app_name: Found 'zero-trust-workload-identity-manager' in component mapping
+
+[23:57:30] Discovering details for pattern-cr (pattern_controller)...
+[23:57:30] Component: pattern-cr
+[23:57:30]   ✅ namespace: Found 'openshift-operators' in infrastructure default
+
+[23:57:30] Component: pattern-cr
+[23:57:30]   ✅ version: Found 'UNKNOWN (no pattern revision found in values-global.yaml)' in 
+
+
+📊 DISCOVERY SUMMARY
+===================
+✅ Successful discoveries: 4
+❌ Failed discoveries: 0
+
