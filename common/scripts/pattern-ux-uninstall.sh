@@ -298,6 +298,9 @@ main() {
     # Initialize uninstall logging with session number
     init_uninstall_logging "$session_number"
     
+    # Show what will be uninstalled (both dry-run and live)
+    print_component_tables "uninstall"
+    
     # Show log file paths prominently for live runs
     if [ "$dry_run" = false ]; then
         echo ""
@@ -319,9 +322,6 @@ main() {
         echo "  🗑️  Uninstall log: $UNINSTALL_LOG"
         exit 0
     fi
-    
-    # Show what will be uninstalled
-    print_component_tables "uninstall"
     
     # Safety preflight check
     safety_preflight_check

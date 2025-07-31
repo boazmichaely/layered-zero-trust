@@ -432,34 +432,75 @@ print_component_tables() {
         print_category_components "applications" $task_number
         
     elif [ "$operation" = "uninstall" ]; then
-        local intro_title=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.title" "UNINSTALL PLAN")
-        local intro_text=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.overview" "")
+        # SECTION 1: Show static pattern configuration overview
+        print_pattern_configuration_overview
         
-        # Replace placeholder
-        intro_title="${intro_title//\{pattern_display_name\}/${PATTERN_CONFIG[display_name]}}"
+        # SECTION 2: Show current installation status and uninstall plan
+        local intro_title="CURRENT INSTALLATION STATUS"
+        local intro_text="The following components are currently installed and will be removed:"
         
         print_header "$intro_title"
-        if [ -n "$intro_text" ]; then
-            echo "$intro_text"
-        fi
+        echo "$intro_text"
+        echo ""
         
-        # Show components that will be uninstalled (reverse order)
-        echo "Components to be removed:"
+        # Count what's actually discovered
+        local discovered_apps=$(count_category_components "applications")
+        local discovered_ops=$(count_category_components "operators") 
+        local discovered_infra=$(count_category_components "infrastructure")
+        local discovered_pattern=$(count_category_components "pattern_controller")
+        
+        # Show discovered components that will be uninstalled (reverse order)
         task_number=1
         
         # Applications (removed first)
-        print_info "ArgoCD Applications (removed first):"
-        print_category_components "applications" $task_number
-        task_number=$((task_number + $(count_category_components "applications")))
+        if [ $discovered_apps -gt 0 ]; then
+            print_info "ARGOCD APPLICATIONS ($discovered_apps found - will be removed first):"
+            print_category_components "applications" $task_number
+            task_number=$((task_number + discovered_apps))
+            echo ""
+        else
+            print_info "ARGOCD APPLICATIONS (0 found):"
+            echo "  (No pattern applications currently installed)"
+            echo ""
+        fi
         
-        # Operators
-        print_info "Operators:"
-        print_category_components "operators" $task_number
-        task_number=$((task_number + $(count_category_components "operators")))
+        # Operators 
+        if [ $discovered_ops -gt 0 ]; then
+            print_info "OPERATORS ($discovered_ops found):"
+            print_category_components "operators" $task_number
+            task_number=$((task_number + discovered_ops))
+            echo ""
+        else
+            print_info "OPERATORS (0 found):"
+            echo "  (No pattern operators currently installed)"
+            echo ""
+        fi
         
-        # Infrastructure  
-        print_info "Infrastructure:"
-        print_category_components "infrastructure" $task_number
+        # Infrastructure
+        if [ $discovered_infra -gt 0 ] || [ $discovered_pattern -gt 0 ]; then
+            local infra_total=$((discovered_infra + discovered_pattern))
+            print_info "INFRASTRUCTURE ($infra_total found):"
+            if [ $discovered_infra -gt 0 ]; then
+                print_category_components "infrastructure" $task_number
+                task_number=$((task_number + discovered_infra))
+            fi
+            if [ $discovered_pattern -gt 0 ]; then
+                print_category_components "pattern_controller" $task_number
+            fi
+            echo ""
+        else
+            print_info "INFRASTRUCTURE (0 found):"
+            echo "  (No pattern infrastructure currently installed)"
+            echo ""
+        fi
+        
+        # Summary
+        local total_discovered=$((discovered_apps + discovered_ops + discovered_infra + discovered_pattern))
+        if [ $total_discovered -gt 0 ]; then
+            print_warning "TOTAL: $total_discovered components will be removed from the cluster"
+        else
+            print_info "RESULT: No pattern components are currently installed - nothing to uninstall"
+        fi
     fi
 }
 
@@ -2182,5 +2223,78 @@ get_uninstall_app_mappings() {
     printf '%s\n' "${mappings[@]}"
 }
 
-# Export the dynamic array functions
+# Export the dynamic array functions  
 export -f get_operator_components get_application_components get_uninstall_app_mappings get_next_log_number
+
+# Display static pattern configuration overview (for uninstall planning)
+print_pattern_configuration_overview() {
+    local intro_title="PATTERN CONFIGURATION OVERVIEW"
+    local intro_text="This pattern is designed to include the following components:"
+    
+    print_header "$intro_title"
+    echo "$intro_text"
+    echo ""
+    
+    # Read static configuration from pattern-ux-config.yaml using simple approach
+    local config_file="common/pattern-ux-config.yaml"
+    
+    # Show operators section
+    local operators_title=$(parse_yaml_value "$config_file" "operators.title" "OPERATORS")
+    local operators_desc=$(parse_yaml_value "$config_file" "operators.description" "OpenShift operators deployed via subscriptions")
+    
+    print_info "$operators_title"
+    echo "  $operators_desc"
+    echo ""
+    
+    # Static list of operators from config (simpler approach)
+    local task_num=1
+    local operator_list=(
+        "gitops-operator:GitOps (ArgoCD) Operator"
+        "cert-manager-op:Cert Manager Operator"
+        "keycloak-op:Keycloak Operator"
+        "spire-op:ZT WIM (SPIRE) Operator"
+        "compliance-op:Compliance Operator"
+    )
+    
+    for item in "${operator_list[@]}"; do
+        local comp_name="${item#*:}"
+        printf "  %s. %s\n" "$task_num" "$comp_name"
+        task_num=$((task_num + 1))
+    done
+    echo ""
+    
+    # Show applications section  
+    local apps_title=$(parse_yaml_value "$config_file" "applications.title" "APPLICATIONS")
+    local apps_desc=$(parse_yaml_value "$config_file" "applications.description" "Applications deployed via ArgoCD")
+    
+    print_info "$apps_title"
+    echo "  $apps_desc"
+    echo ""
+    
+    # Static list of applications from config (simpler approach)  
+    task_num=1
+    local application_list=(
+        "vault-app:Vault"
+        "eso-app:External Secrets CR instance"
+        "cert-manager-app:Red Hat Cert Manager instance"
+        "keycloak-app:Red Hat Keycloak instance"
+        "spire-app:ZT WIM (SPIRE) instance"
+    )
+    
+    for item in "${application_list[@]}"; do
+        local comp_name="${item#*:}"
+        printf "  %s. %s\n" "$task_num" "$comp_name"
+        task_num=$((task_num + 1))
+    done
+    echo ""
+    
+    # Show infrastructure section
+    print_info "INFRASTRUCTURE"
+    echo "  Core infrastructure components"
+    echo ""
+    printf "  %s. %s\n" "1" "Pattern CR (ArgoCD App Factory)"
+    echo ""
+}
+
+# Export the pattern configuration overview function
+export -f print_pattern_configuration_overview

@@ -100,12 +100,12 @@ uninstall-verbose: ## runs robust pattern uninstall (handles stuck finalizers an
 DRY_RUN ?= 0
 DRY_RUN_FLAG = $(if $(filter 1,$(DRY_RUN)),--dry-run,)
 
-.PHONY: install-verbose-v2
-install-verbose-v2: ## runs NEW config-driven async pattern installation (use DRY_RUN=1 for safe testing)
+.PHONY: pattern-ux-install
+pattern-ux-install: ## runs NEW config-driven async pattern installation (use DRY_RUN=1 for safe testing)
 	@common/scripts/pattern-ux-deploy.sh $(DRY_RUN_FLAG) $(NAME) common/install-site.yaml $(HELM_OPTS)
 
-.PHONY: uninstall-verbose-v2  
-uninstall-verbose-v2: ## runs NEW config-driven pattern uninstall (use DRY_RUN=1 for safe testing)
+.PHONY: pattern-ux-uninstall
+pattern-ux-uninstall: ## runs NEW config-driven pattern uninstall (use DRY_RUN=1 for safe testing)
 	@common/scripts/pattern-ux-uninstall.sh $(DRY_RUN_FLAG) $(NAME)
 
 .PHONY: load-secrets

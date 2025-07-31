@@ -1,0 +1,13 @@
+🗑️ PATTERN UNINSTALL LOG
+Generated: Thu Jul 31 04:59:37 UTC 2025
+Pattern: [Loading...]
+=================================
+
+SAFETY PREFLIGHT CHECK
+======================
+04:59:37 - Current user: kube:admin
+04:59:37 - Cluster version: 4.19.5
+04:59:37 - System namespaces detected: openshift-operators, openshift-*, kube-*, default, kube-system
+04:59:37 - Pattern namespaces to delete: cert-manager-operator, keycloak-system, cert-manager-operator, vault, zero-trust-workload-identity-manager, golang-external-secrets, zero-trust-workload-identity-manager, keycloak-system
+04:59:37 - Safety check: PASSED
+
