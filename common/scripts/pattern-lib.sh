@@ -2039,12 +2039,12 @@ init_pattern_lib() {
     # Clean up old temp files first
     cleanup_pattern_temp_files
     
-    # Generate ONE timestamp for all log files in this execution using consistent timezone
-    local session_timestamp=$(get_session_timestamp)
+    # Generate ONE sequential number for all log files in this execution
+    local session_number=$(get_next_log_number)
     
-    # Initialize all logging systems with the same timestamp
-    init_discovery_logging "$session_timestamp"
-    init_deployment_logging "$session_timestamp"
+    # Initialize all logging systems with the same number
+    init_discovery_logging "$session_number"
+    init_deployment_logging "$session_number"
 
     # Load existing configuration  
     if ! load_pattern_config; then
