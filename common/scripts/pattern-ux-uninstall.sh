@@ -6,7 +6,7 @@ set -o pipefail
 
 # Get script directory and source the shared library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/pattern-lib.sh"
+source "$SCRIPT_DIR/pattern-ux-lib.sh"
 
 # Safety preflight check with logging
 safety_preflight_check() {

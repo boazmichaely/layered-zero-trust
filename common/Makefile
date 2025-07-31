@@ -102,11 +102,11 @@ DRY_RUN_FLAG = $(if $(filter 1,$(DRY_RUN)),--dry-run,)
 
 .PHONY: install-verbose-v2
 install-verbose-v2: ## runs NEW config-driven async pattern installation (use DRY_RUN=1 for safe testing)
-	@common/scripts/deploy-pattern-v2.sh $(DRY_RUN_FLAG) $(NAME) common/install-site.yaml $(HELM_OPTS)
+	@common/scripts/pattern-ux-deploy.sh $(DRY_RUN_FLAG) $(NAME) common/install-site.yaml $(HELM_OPTS)
 
 .PHONY: uninstall-verbose-v2  
 uninstall-verbose-v2: ## runs NEW config-driven pattern uninstall (use DRY_RUN=1 for safe testing)
-	@common/scripts/uninstall-pattern-v2.sh $(DRY_RUN_FLAG) $(NAME)
+	@common/scripts/pattern-ux-uninstall.sh $(DRY_RUN_FLAG) $(NAME)
 
 .PHONY: load-secrets
 load-secrets: ## loads the secrets into the backend determined by values-global setting

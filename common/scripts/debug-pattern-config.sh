@@ -1,7 +1,7 @@
 #!/usr/local/bin/bash
 
 # Debug Pattern Configuration Loading
-# Tests the pattern-lib.sh functions in isolation
+# Tests the pattern-ux-lib.sh functions in isolation
 
 set -e
 
@@ -54,7 +54,7 @@ fi
 
 # Test 2: Check if library can be sourced
 print_debug "Step 2: Source pattern library"
-if source "$SCRIPT_DIR/pattern-lib.sh"; then
+if source "$SCRIPT_DIR/pattern-ux-lib.sh"; then
     print_success "Pattern library sourced successfully"
 else
     print_error "Failed to source pattern library"
