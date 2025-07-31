@@ -279,7 +279,7 @@ main() {
     
     # Check for dry-run flag
     if [[ "$1" == "--dry-run" ]]; then
-        echo "DRY RUN MODE - No actual uninstall will occur"
+        echo "🧪 DRY RUN MODE - No actual uninstall will occur"
         dry_run=true
         shift
     fi
@@ -295,10 +295,25 @@ main() {
     # Initialize uninstall logging
     init_uninstall_logging
     
-    # Skip actual uninstall in dry-run mode
+    # Show log file paths prominently for live runs
+    if [ "$dry_run" = false ]; then
+        echo ""
+        print_info "📋 LIVE UNINSTALL LOGGING:"
+        echo "  📊 Discovery log: $DISCOVERY_LOG"
+        echo "  🗑️  Uninstall log: $UNINSTALL_LOG"
+        echo "  ⚠️  Monitor these files during uninstall for real-time progress"
+        echo ""
+    fi
+    
+    # Handle dry-run completion
     if [ "$dry_run" = true ]; then
+        echo ""
         echo "✓ DRY RUN: Skipping confirmation and actual uninstall"
         echo "✓ Configuration loaded successfully - uninstall plan validated!"
+        echo ""
+        print_info "📋 DRY RUN LOG FILES:"
+        echo "  📊 Discovery log: $DISCOVERY_LOG"
+        echo "  🗑️  Uninstall log: $UNINSTALL_LOG"
         exit 0
     fi
     

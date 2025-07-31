@@ -14,7 +14,7 @@ main() {
     
     # Check for dry-run flag
     if [[ "$1" == "--dry-run" ]]; then
-        echo "DRY RUN MODE - No actual deployment will occur"
+        echo "🧪 DRY RUN MODE - No actual deployment will occur"
         dry_run=true
         shift
     fi
@@ -30,13 +30,28 @@ main() {
         exit 1
     fi
     
+    # Show log file paths prominently for live runs
+    if [ "$dry_run" = false ]; then
+        echo ""
+        print_info "📋 LIVE DEPLOYMENT LOGGING:"
+        echo "  📊 Discovery log: $DISCOVERY_LOG"
+        echo "  🚀 Deployment log: $DEPLOYMENT_LOG"
+        echo "  ⚠️  Monitor these files during deployment for real-time progress"
+        echo ""
+    fi
+    
     # Show component plan and get confirmation
     print_component_tables "install"
     
-    # Skip deployment in dry-run mode
+    # Handle dry-run completion
     if [ "$dry_run" = true ]; then
+        echo ""
         echo "✓ DRY RUN: Skipping confirmation and actual deployment"
         echo "✓ Configuration loaded successfully - all systems ready!"
+        echo ""
+        print_info "📋 DRY RUN LOG FILES:"
+        echo "  📊 Discovery log: $DISCOVERY_LOG"
+        echo "  🚀 Deployment log: $DEPLOYMENT_LOG"
         exit 0
     fi
     

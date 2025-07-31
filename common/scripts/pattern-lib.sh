@@ -365,93 +365,158 @@ get_chart_version() {
 # COMPONENT LISTING AND TABLES
 # =============================================================================
 
-# Print component tables for install/uninstall preview
+# Display component tables with proper task numbering
 print_component_tables() {
     local operation="$1"
     
-    # Print pattern info - fix the display name
-    local pattern_display_name="${PATTERN_CONFIG[display_name]:-Layered Zero Trust}"
-    print_header "$pattern_display_name - INSTALLATION PLAN"
+    # Initialize task counter
+    local task_number=1
     
     if [ "$operation" = "install" ]; then
-        local task_number=1
+        local intro_title=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.install.title" "INSTALLATION PLAN")
+        local intro_text=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.install.overview" "")
         
-        # Sequential tasks section
+        # Replace placeholder
+        intro_title="${intro_title//\{pattern_display_name\}/${PATTERN_CONFIG[display_name]}}"
+        
+        print_header "$intro_title"
+        if [ -n "$intro_text" ]; then
+            echo "$intro_text"
+        fi
+        echo ""
+        
+        # Stage 1: Infrastructure (Vault)
         print_info "The following tasks will be executed first:"
+        echo ""
         
-        # Task 1: Deploy Vault
-        echo "${task_number}. -- ℹ INFO: Deploy Vault"
-        print_category_table "infrastructure"
-        echo
+        # Print infrastructure components with task numbers
+        for comp_id in "${!COMPONENTS[@]}"; do
+            if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "infrastructure" ]; then
+                print_category_components "infrastructure" $task_number
+                task_number=$((task_number + $(count_category_components "infrastructure")))
+                echo ""
+                break
+            fi
+        done
+        
+        # Stage 2: Secrets Loading  
+        printf "%s %s\n" "$task_number." "Load secrets into Vault"
         task_number=$((task_number + 1))
+        print_single_component_row "Load secrets into Vault" "N/A" "N/A"
+        echo ""
         
-        # Task 2: Load secrets  
-        echo "${task_number}. -- ℹ INFO: Load secrets into Vault"
-        printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "VERSION"
-        printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
-        printf "%-50s | %-40s | %s\n" "Load secrets into Vault" "N/A" "N/A"
-        echo
-        task_number=$((task_number + 1))
-        
-        # Parallel tasks section
+        # Stages 3-5: Sequential blocks
         print_info "The following blocks will be executed sequentially. Tasks in each block will run in parallel and be monitored:"
+        echo ""
         
-        # Task 3: Install Operators
-        echo "${task_number}. -- ℹ INFO: Install Operators:"
-        print_category_table "operators"
-        echo
+        # Stage 3: Operators  
+        print_info "Install Operators:"
+        print_category_components "operators" $task_number
+        task_number=$((task_number + $(count_category_components "operators")))
+        echo ""
+        
+        # Stage 4: Pattern Controller
+        print_info "Deploy Pattern CR (ArgoCD App Factory):"
+        print_category_components "pattern_controller" $task_number
         task_number=$((task_number + 1))
+        echo ""
         
-        # Task 4: Deploy Pattern CR
-        echo "${task_number}. -- ℹ INFO: Deploy Pattern CR (ArgoCD App Factory):"
-        local pattern_cr_name="${COMPONENTS[pattern-cr_name]:-Pattern CR (ArgoCD App Factory)}"
-        local pattern_cr_namespace="${COMPONENTS[pattern-cr_namespace]:-openshift-operators}"
-        local pattern_cr_version=$(get_component_version "pattern-cr")
-        printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "VERSION"
-        printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
-        printf "%-50s | %-40s | %s\n" "$pattern_cr_name" "$pattern_cr_namespace" "$pattern_cr_version"
-        echo
-        task_number=$((task_number + 1))
+        # Stage 5: Applications
+        print_info "Install ArgoCD applications:"
+        print_category_components "applications" $task_number
         
-        # Task 5: Install ArgoCD applications
-        echo "${task_number}. -- ℹ INFO: Install ArgoCD applications:"
-        print_category_table "applications"
-        echo
+    elif [ "$operation" = "uninstall" ]; then
+        local intro_title=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.title" "UNINSTALL PLAN")
+        local intro_text=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.overview" "")
+        
+        # Replace placeholder
+        intro_title="${intro_title//\{pattern_display_name\}/${PATTERN_CONFIG[display_name]}}"
+        
+        print_header "$intro_title"
+        if [ -n "$intro_text" ]; then
+            echo "$intro_text"
+        fi
+        
+        # Show components that will be uninstalled (reverse order)
+        echo "Components to be removed:"
+        task_number=1
+        
+        # Applications (removed first)
+        print_info "ArgoCD Applications (removed first):"
+        print_category_components "applications" $task_number
+        task_number=$((task_number + $(count_category_components "applications")))
+        
+        # Operators
+        print_info "Operators:"
+        print_category_components "operators" $task_number
+        task_number=$((task_number + $(count_category_components "operators")))
+        
+        # Infrastructure  
+        print_info "Infrastructure:"
+        print_category_components "infrastructure" $task_number
     fi
 }
 
-# Print a single category table
-print_category_table() {
+# Helper function to count components in a category
+count_category_components() {
     local category="$1"
+    local count=0
     
-    # Check if this is applications category to get version column title
-    local version_header="VERSION"
-    if [ "$category" = "applications" ]; then
-        version_header="HELM CHART VERSION"
-    fi
-    
-    # Table header
-    printf "%-50s | %-40s | %s\n" "NAME" "NAMESPACE" "$version_header"
-    printf "%s | %s | %s\n" "$(printf '%.50s' "$(printf '%*s' 50 '' | tr ' ' '-')")" "$(printf '%.40s' "$(printf '%*s' 40 '' | tr ' ' '-')")" "$(printf '%*s' 28 '' | tr ' ' '-')"
-    
-    # Print components in this category
     for comp_id in "${!COMPONENTS[@]}"; do
         if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "$category" ]; then
-            local name="${COMPONENTS[${comp_id}_name]}"
-            local namespace="${COMPONENTS[${comp_id}_namespace]}"
-            local version=$(get_component_version "$comp_id")
-            
-            # Ensure we have values (debugging)
-            if [ -z "$name" ]; then
-                name="[NAME NOT FOUND: $comp_id]"
-            fi
-            if [ -z "$namespace" ]; then
-                namespace="[NAMESPACE NOT FOUND]"
-            fi
-            
-            printf "%-50s | %-40s | %s\n" "$name" "$namespace" "$version"
+            count=$((count + 1))
         fi
     done
+    
+    echo $count
+}
+
+# Print components for a category with task numbers
+print_category_components() {
+    local category="$1"
+    local start_number="$2"
+    local current_number=$start_number
+    
+    # Print table header
+    local name_width="${PATTERN_CONFIG[name_column_width]:-50}"
+    local namespace_width="${PATTERN_CONFIG[namespace_column_width]:-40}"
+    local version_width="${PATTERN_CONFIG[version_column_width]:-40}"
+    
+    # Get version column title for this category
+    local version_title="VERSION"
+    if [ "$category" = "applications" ]; then
+        version_title=$(parse_yaml_value "$PATTERN_CONFIG_FILE" "$category.version_column_title" "HELM CHART VERSION")
+    fi
+    
+    printf "%-3s %-*s | %-*s | %s\n" "NUM" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "$version_title"
+    printf "%-3s %s | %s | %s\n" "---" "$(printf '%-*s' "$name_width" | tr ' ' '-')" "$(printf '%-*s' "$namespace_width" | tr ' ' '-')" "$(printf '%-*s' "$version_width" | tr ' ' '-')"
+    
+    # Print each component with task number
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "$category" ]; then
+            local name="${COMPONENTS[${comp_id}_name]:-Unknown}"
+            local namespace="${COMPONENTS[${comp_id}_namespace]:-unknown}"
+            local version="${COMPONENTS[${comp_id}_version]:-unknown}"
+            
+            printf "%-3s %-*s | %-*s | %s\n" "$current_number." "$name_width" "$name" "$namespace_width" "$namespace" "$version"
+            current_number=$((current_number + 1))
+        fi
+    done
+}
+
+# Print a single component row (for secrets loading)
+print_single_component_row() {
+    local name="$1"
+    local namespace="$2" 
+    local version="$3"
+    
+    local name_width="${PATTERN_CONFIG[name_column_width]:-50}"
+    local namespace_width="${PATTERN_CONFIG[namespace_column_width]:-40}"
+    local version_width="${PATTERN_CONFIG[version_column_width]:-40}"
+    
+    printf "%-3s %-*s | %-*s | %s\n" "NUM" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "VERSION"
+    printf "%-3s %s | %s | %s\n" "---" "$(printf '%-*s' "$name_width" | tr ' ' '-')" "$(printf '%-*s' "$namespace_width" | tr ' ' '-')" "$(printf '%-*s' "$version_width" | tr ' ' '-')"
+    printf "%-3s %-*s | %-*s | %s\n" " " "$name_width" "$name" "$namespace_width" "$namespace" "$version"
 }
 
 # =============================================================================
@@ -832,14 +897,21 @@ discover_namespace() {
     
     case "$component_type" in
         "operators")
-            # Try values-hub.yaml subscriptions section
-            local sub_key=$(discover_subscription_key_for_component "$comp_id")
-            if [ -n "$sub_key" ]; then
-                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.namespace")
-                source="values-hub.yaml subscriptions.${sub_key}.namespace"
-                reason="subscription found"
+            # Special handling for gitops operator (typically pre-installed)
+            if [ "$comp_id" = "gitops-operator" ]; then
+                result="openshift-gitops"
+                source="infrastructure default"
+                reason="GitOps operator standard namespace"
             else
-                reason="no matching subscription found in values-hub.yaml"
+                # Try values-hub.yaml subscriptions section
+                local sub_key=$(discover_subscription_key_for_component "$comp_id")
+                if [ -n "$sub_key" ]; then
+                    result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.namespace")
+                    source="values-hub.yaml subscriptions.${sub_key}.namespace"
+                    reason="subscription found"
+                else
+                    reason="no matching subscription found in values-hub.yaml"
+                fi
             fi
             ;;
         "applications")
@@ -866,6 +938,7 @@ discover_namespace() {
             ;;
     esac
     
+    # If no result found, mark as unknown
     if [ -z "$result" ]; then
         result="UNKNOWN ($reason)"
     fi
@@ -912,20 +985,27 @@ discover_version() {
     
     case "$component_type" in
         "operators")
-            # Try to get channel from values-hub.yaml
-            local sub_key=$(discover_subscription_key_for_component "$comp_id")
-            if [ -n "$sub_key" ]; then
-                result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.channel")
-                source="values-hub.yaml subscriptions.${sub_key}.channel"
-                if [ -n "$result" ]; then
-                    reason="subscription channel found"
+            # Special handling for gitops operator
+            if [ "$comp_id" = "gitops-operator" ]; then
+                result="stable"
+                source="infrastructure default"
+                reason="GitOps operator typically uses stable channel"
+            else
+                # Try to get channel from values-hub.yaml
+                local sub_key=$(discover_subscription_key_for_component "$comp_id")
+                if [ -n "$sub_key" ]; then
+                    result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.${sub_key}.channel")
+                    source="values-hub.yaml subscriptions.${sub_key}.channel"
+                    if [ -n "$result" ]; then
+                        reason="subscription channel found"
+                    else
+                        reason="subscription exists but no channel specified"
+                        result="UNKNOWN ($reason)"
+                    fi
                 else
-                    reason="subscription exists but no channel specified"
+                    reason="no subscription found for operator"
                     result="UNKNOWN ($reason)"
                 fi
-            else
-                reason="no subscription found for operator"
-                result="UNKNOWN ($reason)"
             fi
             ;;
         "applications")
@@ -943,45 +1023,51 @@ discover_version() {
                         local chart_file="${chart_path}/Chart.yaml"
                         if [ -f "$chart_file" ]; then
                             result=$(parse_yaml_value "$chart_file" "version")
-                            source="$chart_file"
                             if [ -n "$result" ]; then
-                                reason="version found in Chart.yaml"
+                                source="$chart_file version"
+                                reason="chart version from Chart.yaml"
                             else
-                                reason="Chart.yaml exists but no version field"
+                                reason="Chart.yaml exists but no version found"
                                 result="UNKNOWN ($reason)"
                             fi
                         else
-                            reason="application uses path but Chart.yaml not found at $chart_file"
+                            reason="chart path specified but Chart.yaml not found"
                             result="UNKNOWN ($reason)"
                         fi
                     else
-                        reason="application has no chartVersion or path"
+                        reason="no chartVersion or path specified"
                         result="UNKNOWN ($reason)"
                     fi
                 fi
             else
-                reason="no application found"
+                reason="no application mapping found"
                 result="UNKNOWN ($reason)"
             fi
             ;;
         "infrastructure")
-            # Special handling for infrastructure
+            # Try infrastructure components
             case "$comp_id" in
-                "vault-app")
+                "vault-app") 
                     result=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.vault.chartVersion")
                     source="values-hub.yaml applications.vault.chartVersion"
-                    reason="vault chart version"
+                    reason="infrastructure vault chart version"
                     ;;
-                "pattern-cr")
-                    result=$(parse_yaml_value "values-global.yaml" "clusterGroupChartVersion")
-                    source="values-global.yaml clusterGroupChartVersion"  
-                    reason="pattern chart version"
-                    ;;
-                *)
-                    reason="unknown infrastructure component"
+                *) 
+                    reason="unknown infrastructure component for version discovery"
                     result="UNKNOWN ($reason)"
                     ;;
             esac
+            ;;
+        "pattern_controller")
+            # Pattern CR version from global config
+            result=$(parse_yaml_value "values-global.yaml" "global.pattern.revision")
+            if [ -n "$result" ]; then
+                source="values-global.yaml global.pattern.revision" 
+                reason="pattern revision found"
+            else
+                reason="no pattern revision found in values-global.yaml"
+                result="UNKNOWN ($reason)"
+            fi
             ;;
         *)
             reason="unknown component type for version discovery"
@@ -989,6 +1075,7 @@ discover_version() {
             ;;
     esac
     
+    # Ensure we have a result
     if [ -z "$result" ]; then
         result="UNKNOWN ($reason)"
     fi
@@ -1005,7 +1092,7 @@ discover_subscription_key_for_component() {
         "keycloak-op") echo "rhbk" ;;
         "spire-op") echo "zero-trust-workload-identity-manager" ;;
         "compliance-op") echo "compliance-operator" ;;
-        "gitops-operator") echo "gitops" ;; # if it exists
+        "gitops-operator") echo "" ;; # GitOps operator is typically pre-installed
         *) echo "" ;;
     esac
 }
