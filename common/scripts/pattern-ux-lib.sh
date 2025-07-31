@@ -2297,3 +2297,130 @@ print_category_components_with_status() {
 
 # Export the component installation checking function
 export -f check_component_installed print_category_components_with_status
+
+# =============================================================================
+# DISCOVERY-DRIVEN DEPLOYMENT FUNCTIONS (Stage 1)
+# =============================================================================
+
+# Discover component metadata for UX display
+discover_component_metadata() {
+    local component_id="$1"
+    
+    # Initialize discovery results
+    local namespace=""
+    local version=""
+    local deployment_method=""
+    
+    print_info "Discovering metadata for component: $component_id"
+    
+    # Check if component exists in applications section (chart-based)
+    if grep -A 10 "applications:" values-hub.yaml | grep -q "^  $component_id:"; then
+        # Extract namespace and version from applications section
+        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$component_id.namespace" "")
+        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$component_id.chartVersion" "")
+        deployment_method="pattern-chart"
+        
+    # Check if component exists in subscriptions section (operator-based)  
+    elif grep -A 20 "subscriptions:" values-hub.yaml | grep -q "^  $component_id:"; then
+        # Extract namespace and version from subscriptions section
+        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$component_id.namespace" "")
+        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$component_id.channel" "")
+        deployment_method="pattern-chart"
+        
+    # Special cases (secrets, pattern-cr, etc.)
+    else
+        case "$component_id" in
+            "secrets")
+                namespace="vault"
+                version="N/A"
+                deployment_method="pattern-chart"
+                ;;
+            "pattern-cr")
+                namespace="openshift-operators"
+                version=$(parse_yaml_value "values-global.yaml" "main.git.revision" "N/A")
+                deployment_method="pattern-chart"
+                ;;
+            *)
+                print_warning "Unknown component: $component_id"
+                namespace="unknown"
+                version="unknown"
+                deployment_method="unknown"
+                ;;
+        esac
+    fi
+    
+    # Return discovered metadata
+    echo "NAMESPACE=$namespace"
+    echo "VERSION=$version"
+    echo "DEPLOYMENT_METHOD=$deployment_method"
+}
+
+# Discover execution command for deployment
+discover_execution_command() {
+    local component_id="$1"
+    
+    # For now, ALL components use the same command (engineers' original method)
+    # This will be the foundation for the discovery-driven approach
+    local command="./pattern.sh make operator-deploy"
+    
+    print_info "Discovered deployment command for $component_id: $command"
+    echo "$command"
+}
+
+# Execute discovered deployment command (with fallback protection)
+execute_discovered_command() {
+    local component_id="$1"
+    local discovered_cmd="$2"
+    local fallback_function="$3"
+    
+    print_info "Executing discovered deployment for: $component_id"
+    print_info "Command: $discovered_cmd"
+    
+    if [ -z "$discovered_cmd" ]; then
+        print_warning "Discovery failed for $component_id"
+        if [ -n "$fallback_function" ]; then
+            print_info "Using fallback method: $fallback_function"
+            eval "$fallback_function"
+            return $?
+        else
+            print_error "No fallback method available for $component_id"
+            return 1
+        fi
+    fi
+    
+    # Execute discovered command
+    # TODO: Implement actual execution in Stage 2
+    print_info "Would execute: $discovered_cmd"
+    print_warning "Stage 1: Discovery only - not executing yet"
+    
+    return 0
+}
+
+# Test discovery functions (for dry-run validation)
+test_discovery() {
+    print_header "DISCOVERY VALIDATION TEST"
+    
+    local test_components=("vault-app" "cert-manager-op" "keycloak-app" "pattern-cr" "secrets")
+    
+    for component in "${test_components[@]}"; do
+        echo ""
+        print_info "Testing discovery for: $component"
+        
+        # Test metadata discovery
+        local metadata=$(discover_component_metadata "$component")
+        echo "  Metadata: $metadata"
+        
+        # Test command discovery  
+        local command=$(discover_execution_command "$component")
+        echo "  Command: $command"
+        
+        # Test execution (dry-run only)
+        execute_discovered_command "$component" "$command" "echo 'fallback method'"
+    done
+    
+    echo ""
+    print_success "Discovery validation completed"
+}
+
+# Export discovery functions
+export -f discover_component_metadata discover_execution_command execute_discovered_command test_discovery

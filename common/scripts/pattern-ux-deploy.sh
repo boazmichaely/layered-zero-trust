@@ -49,6 +49,11 @@ main() {
         echo "✓ DRY RUN: Skipping confirmation and actual deployment"
         echo "✓ Configuration loaded successfully - all systems ready!"
         echo ""
+        
+        # Stage 1: Test discovery functions (new functionality)
+        test_discovery
+        echo ""
+        
         print_info "📋 DRY RUN LOG FILES:"
         echo "  📊 Discovery log: $DISCOVERY_LOG"
         echo "  🚀 Deployment log: $DEPLOYMENT_LOG"
