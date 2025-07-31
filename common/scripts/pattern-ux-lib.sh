@@ -2302,29 +2302,52 @@ export -f check_component_installed print_category_components_with_status
 # DISCOVERY-DRIVEN DEPLOYMENT FUNCTIONS (Stage 1)
 # =============================================================================
 
+# Map UX component IDs to values-hub.yaml names
+map_component_to_values_hub() {
+    local component_id="$1"
+    
+    case "$component_id" in
+        "vault-app") echo "vault" ;;
+        "cert-manager-op") echo "cert-manager" ;;
+        "cert-manager-app") echo "rh-cert-manager" ;;
+        "keycloak-op") echo "rhbk" ;;
+        "keycloak-app") echo "rh-keycloak" ;;
+        "spire-op") echo "zero-trust-workload-identity-manager" ;;
+        "spire-app") echo "zero-trust-workload-identity-manager" ;;
+        "compliance-op") echo "compliance-operator" ;;
+        "eso-app") echo "golang-external-secrets" ;;
+        "gitops-operator") echo "gitops" ;;  # Special case
+        *) echo "$component_id" ;;  # Use as-is for special cases
+    esac
+}
+
 # Discover component metadata for UX display
 discover_component_metadata() {
     local component_id="$1"
+    local values_hub_name=$(map_component_to_values_hub "$component_id")
     
     # Initialize discovery results
     local namespace=""
     local version=""
     local deployment_method=""
     
-    print_info "Discovering metadata for component: $component_id"
+    print_info "Discovering metadata for component: $component_id (maps to: $values_hub_name)"
     
     # Check if component exists in applications section (chart-based)
-    if grep -A 10 "applications:" values-hub.yaml | grep -q "^  $component_id:"; then
+    if grep -A 30 "applications:" values-hub.yaml | grep -q "^    $values_hub_name:"; then
         # Extract namespace and version from applications section
-        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$component_id.namespace" "")
-        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$component_id.chartVersion" "")
+        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$values_hub_name.namespace" "")
+        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.applications.$values_hub_name.chartVersion" "")
+        if [ -z "$version" ]; then
+            version="UNKNOWN (no chartVersion or path specified)"
+        fi
         deployment_method="pattern-chart"
         
     # Check if component exists in subscriptions section (operator-based)  
-    elif grep -A 20 "subscriptions:" values-hub.yaml | grep -q "^  $component_id:"; then
+    elif grep -A 20 "subscriptions:" values-hub.yaml | grep -q "^    $values_hub_name:"; then
         # Extract namespace and version from subscriptions section
-        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$component_id.namespace" "")
-        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$component_id.channel" "")
+        namespace=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$values_hub_name.namespace" "")
+        version=$(parse_yaml_value "values-hub.yaml" "clusterGroup.subscriptions.$values_hub_name.channel" "")
         deployment_method="pattern-chart"
         
     # Special cases (secrets, pattern-cr, etc.)
@@ -2338,6 +2361,11 @@ discover_component_metadata() {
             "pattern-cr")
                 namespace="openshift-operators"
                 version=$(parse_yaml_value "values-global.yaml" "main.git.revision" "N/A")
+                deployment_method="pattern-chart"
+                ;;
+            "gitops-operator")
+                namespace="openshift-gitops"
+                version="stable"
                 deployment_method="pattern-chart"
                 ;;
             *)
@@ -2423,4 +2451,4 @@ test_discovery() {
 }
 
 # Export discovery functions
-export -f discover_component_metadata discover_execution_command execute_discovered_command test_discovery
+export -f map_component_to_values_hub discover_component_metadata discover_execution_command execute_discovered_command test_discovery
