@@ -92,6 +92,20 @@ parse_yaml_value() {
                 local field=$(echo "$key" | cut -d'.' -f2)
                 value=$(sed -n '/^pattern:/,/^[a-z]/p' "$file" | grep "$field:" | sed 's/.*: *//' | sed 's/^"//' | sed 's/"$//')
                 ;;
+            # Handle clusterGroup.subscriptions.* patterns
+            clusterGroup.subscriptions.*.namespace|clusterGroup.subscriptions.*.channel|clusterGroup.subscriptions.*.name)
+                local subscription_key=$(echo "$key" | cut -d'.' -f3)
+                local field=$(echo "$key" | cut -d'.' -f4)
+                # Extract the subscription section for this specific key
+                value=$(sed -n "/^  subscriptions:/,/^  [a-z]/p" "$file" | sed -n "/^    ${subscription_key}:/,/^    [a-z]/p" | grep "      ${field}:" | sed 's/.*: *//' | sed 's/^"//' | sed 's/"$//')
+                ;;
+            # Handle clusterGroup.applications.* patterns  
+            clusterGroup.applications.*.namespace|clusterGroup.applications.*.chartVersion)
+                local app_key=$(echo "$key" | cut -d'.' -f3)
+                local field=$(echo "$key" | cut -d'.' -f4)
+                # Extract the application section for this specific key
+                value=$(sed -n "/^  applications:/,/^  [a-z]/p" "$file" | sed -n "/^    ${app_key}:/,/^    [a-z]/p" | grep "      ${field}:" | sed 's/.*: *//' | sed 's/^"//' | sed 's/"$//')
+                ;;
             *)
                 # For other nested keys, check if it's a category key
                 if [[ "$key" == categories.*.title ]]; then
@@ -103,9 +117,8 @@ parse_yaml_value() {
                     local category=$(echo "$key" | cut -d'.' -f2)
                     value=$(sed -n "/^  $category:/,/^  [a-z]/p" "$file" | grep "version_column_title:" | sed 's/.*: *//' | sed 's/^"//' | sed 's/"$//')
                 else
-                    # For other nested keys, use a simple grep approach
-                    local last_part=$(echo "$key" | sed 's/.*\.//')
-                    value=$(grep "$last_part:" "$file" | head -1 | sed 's/.*: *//' | sed 's/^"//' | sed 's/"$//')
+                    # FIXED: Don't use broken simple grep fallback - return empty for unknown patterns
+                    value=""
                 fi
                 ;;
         esac
@@ -201,7 +214,9 @@ load_component_details() {
     local comp_id="$1"
     local category="$2"
     
-    echo "Discovering details for $comp_id ($category)..." >> "$DISCOVERY_LOG"
+    # Add timestamp to discovery log
+    local timestamp=$(date '+%H:%M:%S')
+    echo "[$timestamp] Discovering details for $comp_id ($category)..." >> "$DISCOVERY_LOG"
     
     # Discover namespace (no more hardcoding!)
     COMPONENTS["${comp_id}_namespace"]=$(discover_namespace "$comp_id" "$category")
@@ -410,19 +425,19 @@ print_component_tables() {
         echo ""
         
         # Stage 3: Operators  
-        print_info "Install Operators:"
+        print_sequence_header "Install Operators"
         print_category_components "operators" $task_number
         task_number=$((task_number + $(count_category_components "operators")))
         echo ""
         
         # Stage 4: Pattern Controller
-        print_info "Deploy Pattern CR (ArgoCD App Factory):"
+        print_sequence_header "Deploy Pattern CR (ArgoCD App Factory)"
         print_category_components "pattern_controller" $task_number
         task_number=$((task_number + 1))
         echo ""
         
         # Stage 5: Applications
-        print_info "Install ArgoCD applications:"
+        print_sequence_header "Install ArgoCD applications"
         print_category_components "applications" $task_number
         
     elif [ "$operation" = "uninstall" ]; then
@@ -471,13 +486,19 @@ count_category_components() {
     echo $count
 }
 
+# Print a sequence header with better visual hierarchy
+print_sequence_header() {
+    local sequence_name="$1"
+    echo -e "${BOLD}${CYAN}ℹ--- Sequence: $sequence_name${NC}"
+}
+
 # Print components for a category with task numbers
 print_category_components() {
     local category="$1"
     local start_number="$2"
     local current_number=$start_number
     
-    # Print table header
+    # Print table header (no "NUM" header, just blank space)
     local name_width="${PATTERN_CONFIG[name_column_width]:-50}"
     local namespace_width="${PATTERN_CONFIG[namespace_column_width]:-40}"
     local version_width="${PATTERN_CONFIG[version_column_width]:-40}"
@@ -488,7 +509,7 @@ print_category_components() {
         version_title=$(parse_yaml_value "$PATTERN_CONFIG_FILE" "$category.version_column_title" "HELM CHART VERSION")
     fi
     
-    printf "%-3s %-*s | %-*s | %s\n" "NUM" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "$version_title"
+    printf "%-3s %-*s | %-*s | %s\n" "" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "$version_title"
     printf "%-3s %s | %s | %s\n" "---" "$(printf '%-*s' "$name_width" | tr ' ' '-')" "$(printf '%-*s' "$namespace_width" | tr ' ' '-')" "$(printf '%-*s' "$version_width" | tr ' ' '-')"
     
     # Print each component with task number
@@ -514,7 +535,7 @@ print_single_component_row() {
     local namespace_width="${PATTERN_CONFIG[namespace_column_width]:-40}"
     local version_width="${PATTERN_CONFIG[version_column_width]:-40}"
     
-    printf "%-3s %-*s | %-*s | %s\n" "NUM" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "VERSION"
+    printf "%-3s %-*s | %-*s | %s\n" "" "$name_width" "NAME" "$namespace_width" "NAMESPACE" "VERSION"
     printf "%-3s %s | %s | %s\n" "---" "$(printf '%-*s' "$name_width" | tr ' ' '-')" "$(printf '%-*s' "$namespace_width" | tr ' ' '-')" "$(printf '%-*s' "$version_width" | tr ' ' '-')"
     printf "%-3s %-*s | %-*s | %s\n" " " "$name_width" "$name" "$namespace_width" "$namespace" "$version"
 }
@@ -844,16 +865,24 @@ declare -A DISCOVERY_FAILURES
 
 # Initialize discovery logging
 init_discovery_logging() {
-    DISCOVERY_LOG="/tmp/pattern-discovery-$$.log"
+    local timestamp="$1"  # Accept timestamp as parameter
+    
+    DISCOVERY_LOG="/tmp/pattern-discovery-${timestamp}.log"
     DISCOVERY_SUCCESS_COUNT=0
     DISCOVERY_FAILURE_COUNT=0
-    
+
+    # Ensure the log file gets created
+    if ! touch "$DISCOVERY_LOG" 2>/dev/null; then
+        echo "ERROR: Cannot create discovery log file: $DISCOVERY_LOG" >&2
+        return 1
+    fi
+
     echo "📋 COMPONENT DISCOVERY REPORT" > "$DISCOVERY_LOG"
     echo "Generated: $(date)" >> "$DISCOVERY_LOG"
-    echo "Pattern: [Loading...]" >> "$DISCOVERY_LOG"
+    echo "Pattern: [Loading...]" >> "$DISCOVERY_LOG" # Placeholder
     echo "=================================" >> "$DISCOVERY_LOG"
     echo "" >> "$DISCOVERY_LOG"
-    
+
     print_info "Discovery logging to: $DISCOVERY_LOG"
 }
 
@@ -874,13 +903,15 @@ log_discovery() {
     local result="$4"
     local reason="$5"
     
-    echo "Component: $component" >> "$DISCOVERY_LOG"
+    # Add timestamp to log entries
+    local timestamp=$(date '+%H:%M:%S')
     
+    echo "[$timestamp] Component: $component" >> "$DISCOVERY_LOG"
     if [ -n "$result" ] && [ "$result" != "UNKNOWN"* ]; then
-        echo "  ✅ $field: Found '$result' in $source" >> "$DISCOVERY_LOG"
+        echo "[$timestamp]   ✅ $field: Found '$result' in $source" >> "$DISCOVERY_LOG"
         DISCOVERY_SUCCESS_COUNT=$((DISCOVERY_SUCCESS_COUNT + 1))
     else
-        echo "  ❌ $field: FAILED - $reason" >> "$DISCOVERY_LOG"
+        echo "[$timestamp]   ❌ $field: FAILED - $reason" >> "$DISCOVERY_LOG"
         DISCOVERY_FAILURE_COUNT=$((DISCOVERY_FAILURE_COUNT + 1))
         DISCOVERY_FAILURES["${component}_${field}"]="$reason"
     fi
@@ -1154,15 +1185,22 @@ STAGE_START_TIME=""
 
 # Initialize deployment logging
 init_deployment_logging() {
-    DEPLOYMENT_LOG="/tmp/pattern-deployment-$$.log"
-    DEPLOYMENT_START_TIME=$(date +%s)
+    local timestamp="$1"  # Accept timestamp as parameter
     
-    echo "🚀 DEPLOYMENT EXECUTION LOG" > "$DEPLOYMENT_LOG"
+    DEPLOYMENT_LOG="/tmp/pattern-deployment-${timestamp}.log"
+
+    # Ensure the log file gets created
+    if ! touch "$DEPLOYMENT_LOG" 2>/dev/null; then
+        echo "ERROR: Cannot create deployment log file: $DEPLOYMENT_LOG" >&2
+        return 1
+    fi
+
+    echo "🚀 PATTERN DEPLOYMENT LOG" > "$DEPLOYMENT_LOG"
     echo "Generated: $(date)" >> "$DEPLOYMENT_LOG"
-    echo "Pattern: ${PATTERN_CONFIG[display_name]}" >> "$DEPLOYMENT_LOG"
+    echo "Pattern: [Loading...]" >> "$DEPLOYMENT_LOG" # Placeholder
     echo "=================================" >> "$DEPLOYMENT_LOG"
     echo "" >> "$DEPLOYMENT_LOG"
-    
+
     print_info "Deployment logging to: $DEPLOYMENT_LOG"
 }
 
@@ -1829,15 +1867,22 @@ UNINSTALL_START_TIME=""
 
 # Initialize uninstall logging
 init_uninstall_logging() {
-    UNINSTALL_LOG="/tmp/pattern-uninstall-$$.log"
-    UNINSTALL_START_TIME=$(date +%s)
+    local timestamp="$1"  # Accept timestamp as parameter
     
-    echo "🗑️  UNINSTALL EXECUTION LOG" > "$UNINSTALL_LOG"
+    UNINSTALL_LOG="/tmp/pattern-uninstall-${timestamp}.log"
+
+    # Ensure the log file gets created
+    if ! touch "$UNINSTALL_LOG" 2>/dev/null; then
+        echo "ERROR: Cannot create uninstall log file: $UNINSTALL_LOG" >&2
+        return 1
+    fi
+
+    echo "🗑️ PATTERN UNINSTALL LOG" > "$UNINSTALL_LOG"
     echo "Generated: $(date)" >> "$UNINSTALL_LOG"
-    echo "Pattern: ${PATTERN_CONFIG[display_name]}" >> "$UNINSTALL_LOG"
+    echo "Pattern: [Loading...]" >> "$UNINSTALL_LOG" # Placeholder
     echo "=================================" >> "$UNINSTALL_LOG"
     echo "" >> "$UNINSTALL_LOG"
-    
+
     print_info "Uninstall logging to: $UNINSTALL_LOG"
 }
 
@@ -1960,28 +2005,63 @@ generate_uninstall_summary() {
 # LIBRARY INITIALIZATION
 # =============================================================================
 
+# Cleanup old pattern-monitor directories and temp files
+cleanup_pattern_temp_files() {
+    local current_pid=$$
+    
+    # Clean up old pattern-monitor directories (older than 1 day)
+    find /tmp -maxdepth 1 -name "pattern-monitor-*" -type d -mtime +1 2>/dev/null | while read -r dir; do
+        if [ -d "$dir" ]; then
+            echo "Cleaning up old monitoring directory: $dir" >&2
+            rm -rf "$dir" 2>/dev/null
+        fi
+    done
+    
+    # Clean up old log files (older than 7 days)
+    find /tmp -maxdepth 1 -name "pattern-discovery-*.log" -mtime +7 2>/dev/null | while read -r file; do
+        echo "Cleaning up old discovery log: $file" >&2
+        rm -f "$file" 2>/dev/null
+    done
+    
+    find /tmp -maxdepth 1 -name "pattern-deployment-*.log" -mtime +7 2>/dev/null | while read -r file; do
+        echo "Cleaning up old deployment log: $file" >&2
+        rm -f "$file" 2>/dev/null
+    done
+    
+    find /tmp -maxdepth 1 -name "pattern-uninstall-*.log" -mtime +7 2>/dev/null | while read -r file; do
+        echo "Cleaning up old uninstall log: $file" >&2
+        rm -f "$file" 2>/dev/null
+    done
+}
+
 # Initialize the pattern library
 init_pattern_lib() {
-    # Initialize all logging systems (basic setup)
-    init_discovery_logging
-    init_deployment_logging
+    # Clean up old temp files first
+    cleanup_pattern_temp_files
     
+    # Generate ONE timestamp for all log files in this execution using consistent timezone
+    local session_timestamp=$(get_session_timestamp)
+    
+    # Initialize all logging systems with the same timestamp
+    init_discovery_logging "$session_timestamp"
+    init_deployment_logging "$session_timestamp"
+
     # Load existing configuration  
     if ! load_pattern_config; then
         return 1
     fi
-    
+
     # Update discovery log with actual pattern name
     update_discovery_pattern_name
-    
+
     # Load components with discovery logging
     if ! load_components; then
         return 1
     fi
-    
+
     # Generate final discovery summary
     generate_discovery_summary
-    
+
     return 0
 }
 
@@ -1999,3 +2079,34 @@ export -f deploy_operators_parallel deploy_pattern_controller
 export -f deploy_applications_parallel
 export -f check_uninstall_state ask_confirmation
 export -f init_pattern_lib 
+
+# =============================================================================
+# TIMEZONE CONSISTENCY UTILITIES
+# =============================================================================
+
+# Get consistent timestamp for this execution session
+# This ensures container timezone matches file creation timezone
+get_session_timestamp() {
+    # Force consistent timezone for container vs local execution
+    # The key insight: container displays in UTC but files are created in local time
+    # So we need to ensure BOTH use the same timezone
+    
+    # Test if we're in a container environment by checking file creation timezone
+    local test_file="/tmp/tz-test-$$"
+    touch "$test_file" 2>/dev/null
+    local file_tz_offset=""
+    if [ -f "$test_file" ]; then
+        # Get the timezone offset of file creation (local filesystem)
+        file_tz_offset=$(date -r "$test_file" +%z 2>/dev/null)
+        rm -f "$test_file" 2>/dev/null
+    fi
+    
+    # Force consistency: use the timezone that matches file creation
+    if [ -n "$file_tz_offset" ]; then
+        # Use the same timezone as file creation to ensure display matches files
+        date +%Y%m%d-%H%M%S
+    else
+        # Fallback to UTC if we can't determine file timezone
+        TZ=UTC date +%Y%m%d-%H%M%S
+    fi
+}

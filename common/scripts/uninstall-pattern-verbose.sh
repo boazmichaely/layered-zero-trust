@@ -112,7 +112,7 @@ show_resource_mapping() {
     printf "  %-35s → %s\n" "Zero Trust Workload Identity Manager" "zero-trust-workload-identity-manager"
     printf "  %-35s → %s\n" "Red Hat Cert Manager" "rh-cert-manager"
     printf "  %-35s → %s\n" "Red Hat Keycloak" "rh-keycloak"
-    printf "  %-35s → %s\n" "Golang External Secrets Operator" "golang-external-secrets"
+    printf "  %-35s → %s\n" "External Secrets Controller" "golang-external-secrets"
     printf "  %-35s → %s\n" "HashiCorp Vault" "vault"
     echo
     
@@ -207,7 +207,7 @@ cleanup_argocd_applications() {
         "zero-trust-workload-identity-manager:Zero Trust Workload Identity Manager"
         "rh-cert-manager:Red Hat Cert Manager" 
         "rh-keycloak:Red Hat Keycloak"
-        "golang-external-secrets:Golang External Secrets Operator"
+        "golang-external-secrets:External Secrets Controller"
         "vault:HashiCorp Vault"
     )
     

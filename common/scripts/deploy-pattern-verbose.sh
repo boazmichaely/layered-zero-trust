@@ -225,7 +225,7 @@ list_components() {
         printf "%-50s | %-40s | %s\n" "--------------------------------------------------" "----------------------------------------" "----------------------------------------"
         
         printf "%-50s | %-40s | %s\n" "HashiCorp Vault" "vault" "$VAULT_CR"
-        printf "%-50s | %-40s | %s\n" "Golang External Secrets" "golang-external-secrets" "$GOLANG_EXTERNAL_SECRETS_CR"
+        printf "%-50s | %-40s | %s\n" "External Secrets Controller" "golang-external-secrets" "$GOLANG_EXTERNAL_SECRETS_CR"
         printf "%-50s | %-40s | %s\n" "Red Hat Keycloak" "keycloak-system" "$RH_KEYCLOAK_CR"
         printf "%-50s | %-40s | %s\n" "Red Hat Cert Manager" "cert-manager" "$RH_CERT_MANAGER_CR"
         printf "%-50s | %-40s | %s\n" "Zero Trust SPIRE/SPIFFE" "zero-trust-workload-identity-manager" "$ZERO_TRUST_CR"
@@ -529,7 +529,7 @@ show_live_dashboard() {
     
     local application_components=(
         "vault-app:HashiCorp Vault"
-        "eso-app:Golang External Secrets"
+        "eso-app:External Secrets Controller"
         "keycloak-app:Red Hat Keycloak" 
         "cert-manager-app:Red Hat Cert Manager"
         "spire-app:Zero Trust SPIRE/SPIFFE"
@@ -719,7 +719,7 @@ print_final_summary() {
         "spire-op:Zero Trust Workload Identity Manager Operator"
         "compliance-op:Compliance Operator"
         "vault-app:HashiCorp Vault"
-        "eso-app:Golang External Secrets"
+        "eso-app:External Secrets Controller"
         "keycloak-app:Red Hat Keycloak" 
         "cert-manager-app:Red Hat Cert Manager"
         "spire-app:Zero Trust SPIRE/SPIFFE"

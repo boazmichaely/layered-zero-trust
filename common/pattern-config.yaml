@@ -82,7 +82,7 @@ categories:
     version_column_title: "HELM CHART VERSION"
     components:
       - id: "eso-app"
-        name: "External Secrets Operator (ESO) instance"
+        name: "External Secrets Controller instance"
         namespace: "golang-external-secrets"
         version_source:
           type: "values-hub"

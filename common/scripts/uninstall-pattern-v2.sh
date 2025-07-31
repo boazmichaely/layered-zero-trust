@@ -292,8 +292,11 @@ main() {
         exit 1
     fi
     
-    # Initialize uninstall logging
-    init_uninstall_logging
+    # Generate session timestamp using consistent timezone handling
+    session_timestamp=$(get_session_timestamp)
+    
+    # Initialize uninstall logging with session timestamp
+    init_uninstall_logging "$session_timestamp"
     
     # Show log file paths prominently for live runs
     if [ "$dry_run" = false ]; then

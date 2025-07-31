@@ -131,7 +131,7 @@ uninstall_resource_mapping:
         technical: "rh-cert-manager"
       - display: "Red Hat Keycloak"
         technical: "rh-keycloak"
-      - display: "Golang External Secrets Operator"
+      - display: "External Secrets Controller"
         technical: "golang-external-secrets"
       - display: "HashiCorp Vault"
         technical: "vault"

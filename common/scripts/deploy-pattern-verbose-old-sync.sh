@@ -54,7 +54,7 @@ list_components() {
     echo
     echo "APPLICATIONS (ArgoCD Applications):"
     echo "  5. HashiCorp Vault"
-    echo "  6. Golang External Secrets Operator"
+    echo "  6. External Secrets Controller"
     echo "  7. Red Hat Keycloak"
     echo "  8. Red Hat Cert Manager" 
     echo "  9. Zero Trust Workload Identity Manager - SPIRE/SPIFFE"
