@@ -867,11 +867,12 @@ declare -A DISCOVERY_FAILURES
 init_discovery_logging() {
     local timestamp="$1"  # Accept timestamp as parameter
     
-    DISCOVERY_LOG="/tmp/pattern-discovery-${timestamp}.log"
+    DISCOVERY_LOG="./logs/pattern-discovery-${timestamp}.log"
     DISCOVERY_SUCCESS_COUNT=0
     DISCOVERY_FAILURE_COUNT=0
 
-    # Ensure the log file gets created
+    # Ensure the logs directory and log file get created
+    mkdir -p "$(dirname "$DISCOVERY_LOG")" 2>/dev/null
     if ! touch "$DISCOVERY_LOG" 2>/dev/null; then
         echo "ERROR: Cannot create discovery log file: $DISCOVERY_LOG" >&2
         return 1
@@ -1187,9 +1188,12 @@ STAGE_START_TIME=""
 init_deployment_logging() {
     local timestamp="$1"  # Accept timestamp as parameter
     
-    DEPLOYMENT_LOG="/tmp/pattern-deployment-${timestamp}.log"
+    DEPLOYMENT_LOG="./logs/pattern-deployment-${timestamp}.log"
+    DEPLOYMENT_SUCCESS_COUNT=0
+    DEPLOYMENT_FAILURE_COUNT=0
 
-    # Ensure the log file gets created
+    # Ensure the logs directory and log file get created  
+    mkdir -p "$(dirname "$DEPLOYMENT_LOG")" 2>/dev/null
     if ! touch "$DEPLOYMENT_LOG" 2>/dev/null; then
         echo "ERROR: Cannot create deployment log file: $DEPLOYMENT_LOG" >&2
         return 1
@@ -1869,9 +1873,12 @@ UNINSTALL_START_TIME=""
 init_uninstall_logging() {
     local timestamp="$1"  # Accept timestamp as parameter
     
-    UNINSTALL_LOG="/tmp/pattern-uninstall-${timestamp}.log"
+    UNINSTALL_LOG="./logs/pattern-uninstall-${timestamp}.log"
+    UNINSTALL_SUCCESS_COUNT=0
+    UNINSTALL_FAILURE_COUNT=0
 
-    # Ensure the log file gets created
+    # Ensure the logs directory and log file get created
+    mkdir -p "$(dirname "$UNINSTALL_LOG")" 2>/dev/null
     if ! touch "$UNINSTALL_LOG" 2>/dev/null; then
         echo "ERROR: Cannot create uninstall log file: $UNINSTALL_LOG" >&2
         return 1
@@ -2017,21 +2024,16 @@ cleanup_pattern_temp_files() {
         fi
     done
     
-    # Clean up old log files (older than 7 days)
-    find /tmp -maxdepth 1 -name "pattern-discovery-*.log" -mtime +7 2>/dev/null | while read -r file; do
-        echo "Cleaning up old discovery log: $file" >&2
-        rm -f "$file" 2>/dev/null
-    done
-    
-    find /tmp -maxdepth 1 -name "pattern-deployment-*.log" -mtime +7 2>/dev/null | while read -r file; do
-        echo "Cleaning up old deployment log: $file" >&2
-        rm -f "$file" 2>/dev/null
-    done
-    
-    find /tmp -maxdepth 1 -name "pattern-uninstall-*.log" -mtime +7 2>/dev/null | while read -r file; do
-        echo "Cleaning up old uninstall log: $file" >&2
-        rm -f "$file" 2>/dev/null
-    done
+    # Clean up old log files from ./logs/ directory (keep only 10 most recent)
+    if [ -d "./logs" ]; then
+        for log_type in "pattern-discovery" "pattern-deployment" "pattern-uninstall"; do
+            # Find logs of this type, sort by number (descending), keep only top 10
+            ls -1 "./logs/${log_type}-"*.log 2>/dev/null | sort -t'-' -k3 -nr | tail -n +11 | while read -r file; do
+                echo "Cleaning up old log: $file" >&2
+                rm -f "$file" 2>/dev/null
+            done
+        done
+    fi
 }
 
 # Initialize the pattern library
