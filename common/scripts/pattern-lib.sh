@@ -2084,7 +2084,45 @@ export -f init_pattern_lib
 # TIMEZONE CONSISTENCY UTILITIES
 # =============================================================================
 
-# Get consistent timestamp for this execution session
+# Get next sequential log number for this execution session
+# This ensures consistent numbering across container and local execution
+get_next_log_number() {
+    local log_dir="./logs"
+    local max_num=0
+    
+    # Ensure log directory exists
+    mkdir -p "$log_dir" 2>/dev/null
+    
+    # Find highest existing number across all log types
+    if [ -d "$log_dir" ]; then
+        for pattern in "pattern-discovery-" "pattern-deployment-" "pattern-uninstall-"; do
+            for file in "$log_dir"/${pattern}*.log; do
+                if [ -f "$file" ]; then
+                    local num=$(basename "$file" | sed "s/${pattern}\([0-9]\{3\}\)\.log/\1/")
+                    # Validate it's a 3-digit number
+                    if echo "$num" | grep -q '^[0-9]\{3\}$'; then
+                        # Remove leading zeros for arithmetic comparison
+                        local num_int=$((10#$num))
+                        if [ "$num_int" -gt "$max_num" ]; then
+                            max_num=$num_int
+                        fi
+                    fi
+                fi
+            done
+        done
+    fi
+    
+    # Increment and wrap at 999
+    local next_num=$((max_num + 1))
+    if [ $next_num -gt 999 ]; then
+        next_num=1
+    fi
+    
+    # Return 3-digit zero-padded number
+    printf "%03d" $next_num
+}
+
+# Get consistent timestamp for this execution session  
 # This ensures container timezone matches file creation timezone
 get_session_timestamp() {
     # Force consistent timezone for container vs local execution
@@ -2156,4 +2194,4 @@ get_uninstall_app_mappings() {
 }
 
 # Export the dynamic array functions
-export -f get_operator_components get_application_components get_uninstall_app_mappings
+export -f get_operator_components get_application_components get_uninstall_app_mappings get_next_log_number
