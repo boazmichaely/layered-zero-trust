@@ -82,7 +82,7 @@ categories:
     version_column_title: "HELM CHART VERSION"
     components:
       - id: "eso-app"
-        name: "External Secrets Controller instance"
+        name: "External Secrets CR instance"
         version_source:
           type: "values-hub"
           key: "golang-external-secrets.chartVersion"
@@ -181,7 +181,6 @@ uninstall:
         # Note: vault-app now deployed with Pattern CR, not ArgoCD
         # Then delete parent application last
         - pattern_name: "{pattern-name}-hub"
-          namespace: "openshift-gitops"
     
     - step: "gitops_operator"
       description: "GitOps Operator"
@@ -203,15 +202,7 @@ uninstall:
     
     - step: "namespaces"
       description: "Pattern Namespaces"
-      # Extracted from current script
-      namespaces:
-        - "vault"
-        - "keycloak-system"
-        - "cert-manager"
-        - "cert-manager-operator"
-        - "golang-external-secrets"
-        - "zero-trust-workload-identity-manager"
-        - "layered-zero-trust-hub"
+      # Namespaces will be dynamically discovered during uninstall
     
     - step: "pattern_cr"
       description: "Pattern Custom Resource"
@@ -220,9 +211,8 @@ uninstall:
 
   # Resource patterns for cleanup detection
   cleanup_patterns:
-    subscriptions: "(cert-manager|rhbk|compliance|zero-trust)"
-    csvs: "(cert-manager|keycloak|rhbk|compliance|zero-trust)"
-    namespaces: "(vault|keycloak|cert-manager|zero-trust|external-secrets)"
+    # Subscription and CSV patterns will be dynamically generated during uninstall
+    # Namespace patterns will be dynamically generated during uninstall
 
 # Display configuration
 display:
