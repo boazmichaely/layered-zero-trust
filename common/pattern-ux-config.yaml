@@ -32,8 +32,6 @@ categories:
         name: "Vault"
         version_source:
           type: "values-hub"
-          key: "clusterGroup.applications.vault.chartVersion"
-          chart_prefix: "hashicorp-vault"
         monitor_type: "vault-direct"
 
   operators:
@@ -45,35 +43,30 @@ categories:
         name: "GitOps (ArgoCD) Operator"
         version_source:
           type: "make-show"
-          key: "gitops.channel"
         monitor_type: "subscription"
         
       - id: "cert-manager-op"
         name: "Cert Manager Operator"
         version_source:
           type: "values-hub"
-          key: "cert-manager.channel"
         monitor_type: "subscription"
         
       - id: "keycloak-op"
         name: "Keycloak Operator"
         version_source:
           type: "values-hub"
-          key: "rhbk.channel"
         monitor_type: "subscription"
         
       - id: "spire-op"
         name: "ZT WIM (SPIRE) Operator"
         version_source:
           type: "values-hub"
-          key: "zero-trust-workload-identity-manager.channel"
         monitor_type: "subscription"
         
       - id: "compliance-op"
         name: "Compliance Operator"
         version_source:
           type: "values-hub"
-          key: "compliance-operator.channel"
         monitor_type: "subscription"
 
   applications:
@@ -85,32 +78,24 @@ categories:
         name: "External Secrets CR instance"
         version_source:
           type: "values-hub"
-          key: "golang-external-secrets.chartVersion"
-          chart_prefix: "golang-external-secrets"
         monitor_type: "argocd"
         
       - id: "cert-manager-app"
         name: "Red Hat Cert Manager instance"
         version_source:
           type: "values-hub"
-          key: "rh-cert-manager.chartVersion"
-          chart_prefix: "rh-cert-manager"
         monitor_type: "argocd"
         
       - id: "keycloak-app"
         name: "Red Hat Keycloak instance"
         version_source:
           type: "values-hub"
-          key: "rh-keycloak.chartVersion"
-          chart_prefix: "rh-keycloak"
         monitor_type: "argocd"
         
       - id: "spire-app"
         name: "ZT WIM (SPIRE) instance"
         version_source:
           type: "values-hub"
-          key: "zero-trust-workload-identity-manager.chartVersion"
-          chart_prefix: "zero-trust-workload-identity-manager"
         monitor_type: "argocd"
 
 # Pattern CR - separate from categories as it's the ArgoCD App Factory
@@ -119,7 +104,6 @@ pattern_controller:
   name: "Pattern CR (ArgoCD App Factory)"
   version_source: 
     type: "values-global"
-    key: "clusterGroupChartVersion"
     git_info: true
   monitor_type: "pattern-cr"
 

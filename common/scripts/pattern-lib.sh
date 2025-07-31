@@ -257,33 +257,24 @@ load_component_details() {
 # VERSION DISCOVERY
 # =============================================================================
 
-# Get version information for a component
+# Get version information for a component (now fully dynamic)
 get_component_version() {
     local comp_id="$1"
-    local version_type="${COMPONENTS[${comp_id}_version_type]}"
-    local version_key="${COMPONENTS[${comp_id}_version_key]}"
-    local fallback="${COMPONENTS[${comp_id}_version_fallback]:-unknown}"
-    local chart_prefix="${COMPONENTS[${comp_id}_chart_prefix]}"
     
-    case "$version_type" in
-        "values-global")
-            get_values_global_version "$version_key" "$fallback"
-            ;;
-        "make-show")
-            get_make_show_version "$version_key" "$fallback"
-            ;;
-        "values-hub")
-            if [[ "$version_key" == *.chartVersion ]]; then
-                local app_name=$(echo "$version_key" | cut -d'.' -f1)
-                get_chart_version "$app_name" "$chart_prefix"
-            else
-                get_values_hub_version "$version_key" "$fallback"
-            fi
-            ;;
-        *)
-            echo "$fallback"
-            ;;
-    esac
+    # Use the already-computed dynamic version from discovery
+    local cached_version="${COMPONENTS[${comp_id}_version]}"
+    if [ -n "$cached_version" ]; then
+        echo "$cached_version"
+        return
+    fi
+    
+    # Fallback: determine component type and discover version dynamically
+    local component_type="${COMPONENTS[$comp_id]}"
+    if [ -n "$component_type" ]; then
+        discover_version "$comp_id" "$component_type"
+    else
+        echo "UNKNOWN (component not found)"
+    fi
 }
 
 # Get version from values-global.yaml
