@@ -432,75 +432,45 @@ print_component_tables() {
         print_category_components "applications" $task_number
         
     elif [ "$operation" = "uninstall" ]; then
-        # SECTION 1: Show static pattern configuration overview
-        print_pattern_configuration_overview
+        local intro_title=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.title" "UNINSTALL PLAN")
+        local intro_text=$(parse_yaml_value "$PATTERN_METADATA_FILE" "introductions.uninstall.overview" "")
         
-        # SECTION 2: Show current installation status and uninstall plan
-        local intro_title="CURRENT INSTALLATION STATUS"
-        local intro_text="The following components are currently installed and will be removed:"
+        # Replace placeholder
+        intro_title="${intro_title//\{pattern_display_name\}/${PATTERN_CONFIG[display_name]}}"
         
         print_header "$intro_title"
-        echo "$intro_text"
+        if [ -n "$intro_text" ]; then
+            echo "$intro_text"
+        fi
         echo ""
         
-        # Count what's actually discovered
-        local discovered_apps=$(count_category_components "applications")
-        local discovered_ops=$(count_category_components "operators") 
-        local discovered_infra=$(count_category_components "infrastructure")
-        local discovered_pattern=$(count_category_components "pattern_controller")
+        # Show SAME plan as install but with installation status indicators
+        print_info "The following tasks would be executed in REVERSE order. Components are color-coded:"
+        echo "  🟢 = Currently installed (will be removed)"  
+        echo "  🔴 = Not installed (will be skipped)"
+        echo ""
         
-        # Show discovered components that will be uninstalled (reverse order)
-        task_number=1
+        # Show components in reverse installation order (how they'll be uninstalled)
         
-        # Applications (removed first)
-        if [ $discovered_apps -gt 0 ]; then
-            print_info "ARGOCD APPLICATIONS ($discovered_apps found - will be removed first):"
-            print_category_components "applications" $task_number
-            task_number=$((task_number + discovered_apps))
-            echo ""
-        else
-            print_info "ARGOCD APPLICATIONS (0 found):"
-            echo "  (No pattern applications currently installed)"
-            echo ""
-        fi
+        # Stage 1: Applications (removed first)
+        print_sequence_header "Remove Applications"
+        print_category_components_with_status "applications" $task_number
+        task_number=$((task_number + $(count_category_components "applications")))
+        echo ""
         
-        # Operators 
-        if [ $discovered_ops -gt 0 ]; then
-            print_info "OPERATORS ($discovered_ops found):"
-            print_category_components "operators" $task_number
-            task_number=$((task_number + discovered_ops))
-            echo ""
-        else
-            print_info "OPERATORS (0 found):"
-            echo "  (No pattern operators currently installed)"
-            echo ""
-        fi
+        # Stage 2: Operators
+        print_sequence_header "Remove Operators"  
+        print_category_components_with_status "operators" $task_number
+        task_number=$((task_number + $(count_category_components "operators")))
+        echo ""
         
-        # Infrastructure
-        if [ $discovered_infra -gt 0 ] || [ $discovered_pattern -gt 0 ]; then
-            local infra_total=$((discovered_infra + discovered_pattern))
-            print_info "INFRASTRUCTURE ($infra_total found):"
-            if [ $discovered_infra -gt 0 ]; then
-                print_category_components "infrastructure" $task_number
-                task_number=$((task_number + discovered_infra))
-            fi
-            if [ $discovered_pattern -gt 0 ]; then
-                print_category_components "pattern_controller" $task_number
-            fi
-            echo ""
-        else
-            print_info "INFRASTRUCTURE (0 found):"
-            echo "  (No pattern infrastructure currently installed)"
-            echo ""
-        fi
+        # Stage 3: Infrastructure
+        print_sequence_header "Remove Infrastructure"
+        print_category_components_with_status "infrastructure" $task_number
+        task_number=$((task_number + $(count_category_components "infrastructure")))
         
-        # Summary
-        local total_discovered=$((discovered_apps + discovered_ops + discovered_infra + discovered_pattern))
-        if [ $total_discovered -gt 0 ]; then
-            print_warning "TOTAL: $total_discovered components will be removed from the cluster"
-        else
-            print_info "RESULT: No pattern components are currently installed - nothing to uninstall"
-        fi
+        # Pattern CR
+        print_category_components_with_status "pattern_controller" $task_number
     fi
 }
 
@@ -2226,75 +2196,101 @@ get_uninstall_app_mappings() {
 # Export the dynamic array functions  
 export -f get_operator_components get_application_components get_uninstall_app_mappings get_next_log_number
 
-# Display static pattern configuration overview (for uninstall planning)
-print_pattern_configuration_overview() {
-    local intro_title="PATTERN CONFIGURATION OVERVIEW"
-    local intro_text="This pattern is designed to include the following components:"
+# Check if a component is actually installed using oc commands
+check_component_installed() {
+    local comp_id="$1"
+    local component_type="${COMPONENTS[$comp_id]}"
     
-    print_header "$intro_title"
-    echo "$intro_text"
-    echo ""
-    
-    # Read static configuration from pattern-ux-config.yaml using simple approach
-    local config_file="common/pattern-ux-config.yaml"
-    
-    # Show operators section
-    local operators_title=$(parse_yaml_value "$config_file" "operators.title" "OPERATORS")
-    local operators_desc=$(parse_yaml_value "$config_file" "operators.description" "OpenShift operators deployed via subscriptions")
-    
-    print_info "$operators_title"
-    echo "  $operators_desc"
-    echo ""
-    
-    # Static list of operators from config (simpler approach)
-    local task_num=1
-    local operator_list=(
-        "gitops-operator:GitOps (ArgoCD) Operator"
-        "cert-manager-op:Cert Manager Operator"
-        "keycloak-op:Keycloak Operator"
-        "spire-op:ZT WIM (SPIRE) Operator"
-        "compliance-op:Compliance Operator"
-    )
-    
-    for item in "${operator_list[@]}"; do
-        local comp_name="${item#*:}"
-        printf "  %s. %s\n" "$task_num" "$comp_name"
-        task_num=$((task_num + 1))
-    done
-    echo ""
-    
-    # Show applications section  
-    local apps_title=$(parse_yaml_value "$config_file" "applications.title" "APPLICATIONS")
-    local apps_desc=$(parse_yaml_value "$config_file" "applications.description" "Applications deployed via ArgoCD")
-    
-    print_info "$apps_title"
-    echo "  $apps_desc"
-    echo ""
-    
-    # Static list of applications from config (simpler approach)  
-    task_num=1
-    local application_list=(
-        "vault-app:Vault"
-        "eso-app:External Secrets CR instance"
-        "cert-manager-app:Red Hat Cert Manager instance"
-        "keycloak-app:Red Hat Keycloak instance"
-        "spire-app:ZT WIM (SPIRE) instance"
-    )
-    
-    for item in "${application_list[@]}"; do
-        local comp_name="${item#*:}"
-        printf "  %s. %s\n" "$task_num" "$comp_name"
-        task_num=$((task_num + 1))
-    done
-    echo ""
-    
-    # Show infrastructure section
-    print_info "INFRASTRUCTURE"
-    echo "  Core infrastructure components"
-    echo ""
-    printf "  %s. %s\n" "1" "Pattern CR (ArgoCD App Factory)"
-    echo ""
+    case "$component_type" in
+        "operators")
+            # Check if subscription exists
+            local sub_name="${COMPONENTS[${comp_id}_subscription_name]}"
+            local namespace="${COMPONENTS[${comp_id}_namespace]}"
+            if [ -n "$sub_name" ] && [ -n "$namespace" ] && [ "$namespace" != "UNKNOWN"* ]; then
+                oc get subscription "$sub_name" -n "$namespace" >/dev/null 2>&1
+                return $?
+            fi
+            return 1
+            ;;
+        "applications")
+            # Check if ArgoCD application exists (only if ArgoCD is installed)
+            if ! oc api-resources | grep -q "applications.*argoproj.io" 2>/dev/null; then
+                return 1  # ArgoCD not installed, so no applications
+            fi
+            local app_name="${COMPONENTS[${comp_id}_argocd_app_name]}"
+            if [ -n "$app_name" ] && [ "$app_name" != "UNKNOWN"* ]; then
+                oc get application.argoproj.io "$app_name" -n openshift-gitops >/dev/null 2>&1
+                return $?
+            fi
+            return 1
+            ;;
+        "infrastructure")
+            # Check vault namespace or other infrastructure
+            case "$comp_id" in
+                "vault-app")
+                    oc get namespace vault >/dev/null 2>&1
+                    return $?
+                    ;;
+                *)
+                    return 1
+                    ;;
+            esac
+            ;;
+        "pattern_controller")
+            # Check if pattern CR exists (only if ArgoCD is installed)
+            if ! oc api-resources | grep -q "applications.*argoproj.io" 2>/dev/null; then
+                return 1  # ArgoCD not installed, so no pattern CR
+            fi
+            oc get application.argoproj.io -n openshift-gitops | grep -q "$(echo "$PATTERN_CONFIG[name]" | sed 's/layered-zero-trust/layered-zero-trust-hub/')" 2>/dev/null
+            return $?
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
-# Export the pattern configuration overview function
-export -f print_pattern_configuration_overview
+# Print category components with installation status indicators
+print_category_components_with_status() {
+    local category="$1"
+    local start_task_number="$2"
+    local task_number=$start_task_number
+    
+    # Create arrays to track installed vs missing
+    local installed_components=()
+    local missing_components=()
+    
+    # Check installation status for each component
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "$category" ]; then
+            if check_component_installed "$comp_id"; then
+                installed_components+=("$comp_id")
+            else
+                missing_components+=("$comp_id")
+            fi
+        fi
+    done
+    
+    # Print installed components (green)
+    for comp_id in "${installed_components[@]}"; do
+        local comp_name="${COMPONENTS[${comp_id}_name]}"
+        local namespace="${COMPONENTS[${comp_id}_namespace]}"
+        local version="${COMPONENTS[${comp_id}_version]}"
+        
+        printf "🟢 %s. %s\n" "$task_number" "$comp_name"
+        task_number=$((task_number + 1))
+    done
+    
+    # Print missing components (red) 
+    for comp_id in "${missing_components[@]}"; do
+        local comp_name="${COMPONENTS[${comp_id}_name]}"
+        local namespace="${COMPONENTS[${comp_id}_namespace]}"
+        local version="${COMPONENTS[${comp_id}_version]}"
+        
+        printf "🔴 %s. %s (not installed)\n" "$task_number" "$comp_name"
+        task_number=$((task_number + 1))
+    done
+}
+
+# Export the component installation checking function
+export -f check_component_installed print_category_components_with_status
