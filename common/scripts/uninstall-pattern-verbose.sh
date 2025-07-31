@@ -203,13 +203,10 @@ cleanup_argocd_applications() {
     fi
     
     # Then delete remaining ArgoCD applications in reverse installation order
-    local app_mappings=(
-        "zero-trust-workload-identity-manager:Zero Trust Workload Identity Manager"
-        "rh-cert-manager:Red Hat Cert Manager" 
-        "rh-keycloak:Red Hat Keycloak"
-        "golang-external-secrets:External Secrets Controller"
-        "vault:HashiCorp Vault"
-    )
+    local app_mappings=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && app_mappings+=("$line")
+    done < <(get_uninstall_app_mappings)
     
     print_info "Deleting remaining ArgoCD applications in reverse installation order..."
     

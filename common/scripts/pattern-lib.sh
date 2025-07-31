@@ -2078,7 +2078,7 @@ export -f deploy_vault load_secrets
 export -f deploy_operators_parallel deploy_pattern_controller
 export -f deploy_applications_parallel
 export -f check_uninstall_state ask_confirmation
-export -f init_pattern_lib 
+export -f init_pattern_lib
 
 # =============================================================================
 # TIMEZONE CONSISTENCY UTILITIES
@@ -2110,3 +2110,50 @@ get_session_timestamp() {
         TZ=UTC date +%Y%m%d-%H%M%S
     fi
 }
+
+# =============================================================================
+# DYNAMIC COMPONENT ARRAY GENERATION
+# =============================================================================
+
+# Generate operator components array from YAML data
+# Returns: array of "comp_id:display_name" strings
+get_operator_components() {
+    local components=()
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "operators" ]; then
+            local comp_name="${COMPONENTS[${comp_id}_name]}"
+            components+=("$comp_id:$comp_name")
+        fi
+    done
+    printf '%s\n' "${components[@]}"
+}
+
+# Generate application components array from YAML data  
+# Returns: array of "comp_id:display_name" strings
+get_application_components() {
+    local components=()
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "applications" ]; then
+            local comp_name="${COMPONENTS[${comp_id}_name]}"
+            components+=("$comp_id:$comp_name")
+        fi
+    done
+    printf '%s\n' "${components[@]}"
+}
+
+# Generate uninstall app mappings from YAML data
+# Returns: array of "argocd_app_name:display_name" strings
+get_uninstall_app_mappings() {
+    local mappings=()
+    for comp_id in "${!COMPONENTS[@]}"; do
+        if [[ "$comp_id" != *_* ]] && [ "${COMPONENTS[$comp_id]}" = "applications" ]; then
+            local comp_name="${COMPONENTS[${comp_id}_name]}"
+            local app_name="${COMPONENTS[${comp_id}_argocd_app_name]}"
+            mappings+=("$app_name:$comp_name")
+        fi
+    done
+    printf '%s\n' "${mappings[@]}"
+}
+
+# Export the dynamic array functions
+export -f get_operator_components get_application_components get_uninstall_app_mappings

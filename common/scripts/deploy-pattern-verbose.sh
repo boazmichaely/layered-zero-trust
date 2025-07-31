@@ -520,20 +520,15 @@ show_live_dashboard() {
         "gitops-operator:GitOps Operator"
     )
     
-    local operator_components=(
-        "cert-manager-op:Cert Manager Operator" 
-        "keycloak-op:Keycloak Operator"
-        "spire-op:Zero Trust Workload Identity Manager Operator"
-        "compliance-op:Compliance Operator"
-    )
+    local operator_components=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && operator_components+=("$line")
+    done < <(get_operator_components)
     
-    local application_components=(
-        "vault-app:HashiCorp Vault"
-        "eso-app:External Secrets Controller"
-        "keycloak-app:Red Hat Keycloak" 
-        "cert-manager-app:Red Hat Cert Manager"
-        "spire-app:Zero Trust SPIRE/SPIFFE"
-    )
+    local application_components=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && application_components+=("$line")  
+    done < <(get_application_components)
     
     print_header "LIVE MONITORING DASHBOARD"
     
