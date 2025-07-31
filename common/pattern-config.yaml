@@ -14,65 +14,54 @@ categories:
     components:
       - id: "vault-app"
         name: "Vault"
-        namespace: "vault"
         version_source:
           type: "values-hub"
           key: "clusterGroup.applications.vault.chartVersion"
           chart_prefix: "hashicorp-vault"
-          fallback: "0.1.*"
         monitor_type: "vault-direct"
 
   operators:
-    title: "OPERATORS INSTALLED BY THE PATTERN"
-    description: "Kubernetes operators managed by subscriptions"
+    title: "OPERATORS (INSTALLED WITH OLM)"
+    description: "OpenShift operators deployed via subscriptions"
+    version_column_title: "OLM CHANNEL"
     components:
       - id: "gitops-operator"
         name: "GitOps (ArgoCD) Operator"
-        namespace: "openshift-operators"
         version_source:
           type: "make-show"
           key: "gitops.channel"
-          fallback: "container failed"
         monitor_type: "subscription"
         subscription_name: "openshift-gitops-operator"
         
       - id: "cert-manager-op"
         name: "Cert Manager Operator"
-        namespace: "cert-manager-operator"
         version_source:
           type: "values-hub"
           key: "cert-manager.channel"
-          fallback: "unknown"
         monitor_type: "subscription"
         subscription_name: "openshift-cert-manager-operator"
         
       - id: "keycloak-op"
         name: "Keycloak Operator"
-        namespace: "keycloak-system"
         version_source:
           type: "values-hub"
           key: "rhbk.channel"
-          fallback: "unknown"
         monitor_type: "subscription"
         subscription_name: "rhbk-operator"
         
       - id: "spire-op"
         name: "ZT WIM (SPIRE) Operator"
-        namespace: "zero-trust-workload-identity-manager"
         version_source:
           type: "values-hub"
           key: "zero-trust-workload-identity-manager.channel"
-          fallback: "unknown"
         monitor_type: "subscription"
         subscription_name: "openshift-zero-trust-workload-identity-manager"
         
       - id: "compliance-op"
         name: "Compliance Operator"
-        namespace: "openshift-compliance"
         version_source:
           type: "values-hub"
           key: "compliance-operator.channel"
-          fallback: "unknown"
         monitor_type: "subscription"
         subscription_name: "compliance-operator"
 
@@ -83,45 +72,37 @@ categories:
     components:
       - id: "eso-app"
         name: "External Secrets Controller instance"
-        namespace: "golang-external-secrets"
         version_source:
           type: "values-hub"
           key: "golang-external-secrets.chartVersion"
           chart_prefix: "golang-external-secrets"
-          fallback: "unknown"
         monitor_type: "argocd"
         argocd_app_name: "golang-external-secrets"
         
       - id: "cert-manager-app"
         name: "Red Hat Cert Manager instance"
-        namespace: "cert-manager"
         version_source:
           type: "values-hub"
           key: "rh-cert-manager.chartVersion"
           chart_prefix: "rh-cert-manager"
-          fallback: "unknown"
         monitor_type: "argocd"
         argocd_app_name: "rh-cert-manager"
         
       - id: "keycloak-app"
         name: "Red Hat Keycloak instance"
-        namespace: "keycloak-system"
         version_source:
           type: "values-hub"
           key: "rh-keycloak.chartVersion"
           chart_prefix: "rh-keycloak"
-          fallback: "unknown"
         monitor_type: "argocd"
         argocd_app_name: "rh-keycloak"
         
       - id: "spire-app"
         name: "ZT WIM (SPIRE) instance"
-        namespace: "zero-trust-workload-identity-manager"
         version_source:
           type: "values-hub"
           key: "zero-trust-workload-identity-manager.chartVersion"
           chart_prefix: "zero-trust-workload-identity-manager"
-          fallback: "unknown"
         monitor_type: "argocd"
         argocd_app_name: "zero-trust-workload-identity-manager"
 
@@ -129,7 +110,6 @@ categories:
 pattern_controller:
   id: "pattern-cr"
   name: "Pattern CR (ArgoCD App Factory)"
-  namespace: "openshift-operators"
   version_source: 
     type: "values-global"
     key: "clusterGroupChartVersion"
