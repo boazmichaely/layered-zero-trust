@@ -1,6 +1,6 @@
 #!/usr/local/bin/bash
 
-# Debug Pattern Configuration Loading
+# Pattern UX Debug Utility
 # Tests the pattern-ux-lib.sh functions in isolation
 
 set -e
