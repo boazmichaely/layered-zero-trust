@@ -8,6 +8,9 @@ vault.init
 super-linter.log
 common/pattern-vault.init
 
+# Pattern execution logs
+logs/
+
 # Super-linter outputs
 super-linter-output
 
