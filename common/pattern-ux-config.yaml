@@ -1,7 +1,23 @@
-# Layered Zero Trust Pattern Configuration
-# This file defines all components and their discovery/monitoring patterns
+# =============================================================================
+# PATTERN USER EXPERIENCE CONFIGURATION
+# =============================================================================
+# 
+# This file configures the user experience for pattern deployment and monitoring.
+# It defines how components are discovered, displayed, and monitored during 
+# installation/uninstall operations - but does NOT define the actual pattern 
+# components themselves (those are in values-hub.yaml).
+#
+# Purpose: Enhanced UX for pattern lifecycle management
+# - Component discovery and display configuration  
+# - Monitoring timeouts and intervals
+# - Table formatting and column titles
+# - Logging and dashboard behavior
+#
+# Note: This file contains NO hardcoded namespaces or fallback values.
+# All runtime values are dynamically discovered from the actual deployment configs.
+# =============================================================================
 
-# Pattern metadata
+# Pattern identification for UX purposes
 pattern:
   name: "layered-zero-trust"
   display_name: "Layered Zero Trust"

@@ -1,12 +1,24 @@
-# Pattern Metadata and Descriptions
-# This file contains all text content that appears in the scripts
+# =============================================================================
+# PATTERN USER EXPERIENCE METADATA  
+# =============================================================================
+#
+# This file contains metadata that enhances the user experience during pattern
+# deployment and uninstall operations. It defines display messages, progress
+# indicators, and user guidance - but does NOT contain the actual pattern 
+# definition (that's in values-hub.yaml).
+#
+# Purpose: Enhanced UX for pattern lifecycle operations
+# - Installation progress messages and guidance
+# - Uninstall safety warnings and confirmations  
+# - Component mapping for user-friendly displays
+# - Success/failure messaging templates
+#
+# Note: This is purely presentational metadata to improve user experience.
+# =============================================================================
 
+# Pattern UX metadata
 pattern:
-  name: "Layered Zero Trust"
-  description: |
-    This pattern demonstrates a comprehensive zero-trust security model using 
-    HashiCorp Vault, SPIRE/SPIFFE workload identity, and Red Hat security 
-    components for multi-layered protection.
+  description: "Demonstrate a comprehensive zero-trust security model using HashiCorp Vault, SPIRE/SPIFFE workload identity, and Red Hat security components."
 
 # Introduction sections for different operations
 introductions:

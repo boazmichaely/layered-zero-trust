@@ -18,8 +18,8 @@ declare -A COMPONENT_STATUS
 declare -a MONITOR_PIDS
 MONITOR_DIR="/tmp/pattern-monitor-$$"
 DEPLOYMENT_START_TIME=$(date +%s)
-PATTERN_CONFIG_FILE="common/pattern-config.yaml"
-PATTERN_METADATA_FILE="common/pattern-metadata.yaml"
+PATTERN_CONFIG_FILE="${PATTERN_CONFIG_FILE:-common/pattern-ux-config.yaml}"
+PATTERN_METADATA_FILE="${PATTERN_METADATA_FILE:-common/pattern-ux-metadata.yaml}"
 
 # =============================================================================
 # UTILITY FUNCTIONS
