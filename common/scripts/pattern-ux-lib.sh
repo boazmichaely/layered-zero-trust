@@ -2049,6 +2049,9 @@ init_pattern_lib() {
     # Initialize all logging systems with the same number
     init_discovery_logging "$session_number"
     init_deployment_logging "$session_number"
+    
+    # Initialize monitoring directory for status tracking
+    init_monitoring
 
     # Load existing configuration  
     if ! load_pattern_config; then
